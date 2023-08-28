@@ -149,3 +149,161 @@ const (
 	NetworkMessageWhatIsNetworkNumber
 	NetworkMessageNetworkNumberIs
 )
+
+// ErrorClassEnum represents the error classes as constants.
+type ErrorClassEnum int
+
+const (
+	Device ErrorClassEnum = iota
+	Object
+	Property
+	Resources
+	Security
+	Services
+	VT
+	Communication
+)
+
+// Error Code Enum represents the error codes as constants.
+type ErrorCodeEnum int
+
+const (
+	Other ErrorCodeEnum = iota
+	AuthenticationFailed
+	ConfigurationInProgress
+	DeviceBusy
+	DynamicCreationNotSupported
+	FileAccessDenied
+	IncompatibleSecurityLevels
+	InconsistentParameters
+	InconsistentSelectionCriterion
+	InvalidDataType
+	InvalidFileAccessMethod
+	InvalidFileStartPosition
+	InvalidOperatorName
+	InvalidParameterDataType
+	InvalidTimestamp
+	KeyGenerationError
+	MissingRequiredParameter
+	NoObjectsOfSpecifiedType
+	NoSpaceForObject
+	NoSpaceToAddListElement
+	NoSpaceToWriteProperty
+	NoVTSessionsAvailable
+	PropertyIsNotAList
+	ObjectDeletionNotPermitted
+	ObjectIdentifierAlreadyExists
+	OperationalProblem
+	PasswordFailure
+	ReadAccessDenied
+	SecurityNotSupported
+	ServiceRequestDenied
+	Timeout
+	UnknownObject
+	UnknownProperty
+	UnknownVTClass
+	UnknownVTSession
+	UnsupportedObjectType
+	ValueOutOfRange
+	VTSessionAlreadyClosed
+	VTSessionTerminationFailure
+	WriteAccessDenied
+	CharacterSetNotSupported
+	InvalidArrayIndex
+	COVSubscriptionFailed
+	NotCOVProperty
+	OptionalFunctionalityNotSupported
+	InvalidConfigurationData
+	DataTypeNotSupported
+	DuplicateName
+	DuplicateObjectID
+	PropertyIsNotAnArray
+	AbortBufferOverflow
+	AbortInvalidAPDUInThisState
+	AbortPreemptedbyHigherPriorityTask
+	AbortSegmentationNotSupported
+	AbortProprietary
+	AbortOther
+	InvalidTag
+	NetworkDown
+	RejectBufferOverflow
+	RejectInconsistentParameters
+	RejectInvalidParameterDataType
+	RejectInvalidTag
+	RejectMissingRequiredParameter
+	RejectParameterOutOfRange
+	RejectTooManyArguments
+	RejectUndefinedEnumeration
+	RejectUnrecognizedService
+	RejectProprietary
+	RejectOther
+	UnknownDevice
+	UnknownRoute
+	ValueNotInitialized
+	InvalidEventState
+	NoAlarmConfigured
+	LogBufferFull
+	LoggedValuePurged
+	NoPropertySpecified
+	NotConfiguredForTriggeredLogging
+	UnknownSubscription
+	ParameterOutOfRange
+	ListElementNotFound
+	Busy
+	CommunicationDisabled
+	Success
+	AccessDenied
+	BadDestinationAddress
+	BadDestinationDeviceID
+	BadSignature
+	BadSourceAddress
+	BadTimestamp
+	CannotUseKey
+	CannotVerifyMessageID
+	CorrectKeyRevision
+	DestinationDeviceIDRequired
+	DuplicateMessage
+	EncryptionNotConfigured
+	EncryptionRequired
+	IncorrectKey
+	InvalidKeyData
+	KeyUpdateInProgress
+	MalformedMessage
+	NotKeyServer
+	SecurityNotConfigured
+	SourceSecurityRequired
+	TooManyKeys
+	UnknownAuthenticationType
+	UnknownKey
+	UnknownKeyRevision
+	UnknownSourceMessage
+	NotRouterToDNET
+	RouterBusy
+	UnknownNetworkMessage
+	MessageTooLong
+	SecurityError
+	AddressingError
+	WriteBDTFailed
+	ReadBDTFailed
+	RegisterForeignDeviceFailed
+	ReadFDTFailed
+	DeleteFDTEntryFailed
+	DistributeBroadcastFailed
+	UnknownFileSize
+	AbortAPDUTooLong
+	AbortApplicationExceededReplyTime
+	AbortOutOfResources
+	AbortTSMTimeout
+	AbortWindowSizeOutOfRange
+	FileFull
+	InconsistentConfiguration
+	InconsistentObjectType
+	InternalError
+	NotConfigured
+	OutOfMemory
+	ValueTooLong
+	AbortInsufficientSecurity
+	AbortSecurityError
+	DuplicateEntry
+	InvalidValueInThisState
+)
