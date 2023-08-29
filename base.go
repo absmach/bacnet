@@ -307,3 +307,11 @@ const (
 	DuplicateEntry
 	InvalidValueInThisState
 )
+
+type ObjectIdentifier struct {
+	Type     ObjectType
+	Instance int
+}
+
+func (oi *ObjectIdentifier) ASN1decode() {
+}
