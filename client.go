@@ -10,10 +10,13 @@ type Client interface {
 }
 
 func NewClient(address string, port int) (Client, error) {
+	return &client{}, nil
 }
 
 func (c *client) ReadProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier) (interface{}, error) {
+	return nil, nil
 }
 
 func (c *client) WriteProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier, value interface{}) error {
+	return nil
 }
