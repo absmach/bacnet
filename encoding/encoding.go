@@ -1,4 +1,4 @@
-package bacnet
+package encoding
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ const (
 	MaxPriority       = 16
 )
 
-func encodeUnsigned(value uint32) []byte {
+func EncodeUnsigned(value uint32) []byte {
 	switch {
 	case value < 0x100:
 		buf := make([]byte, 1)
@@ -39,7 +39,7 @@ func encodeUnsigned(value uint32) []byte {
 	}
 }
 
-func encodeSigned(value int32) []byte {
+func EncodeSigned(value int32) []byte {
 	switch {
 	case value < 0x100:
 		buf := new(bytes.Buffer)

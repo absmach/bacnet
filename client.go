@@ -5,15 +5,15 @@ type client struct {
 }
 
 type Client interface {
-	ReadProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier) (Value, error)
-	WriteProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier, value Value) error
+	ReadProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier) (interface{}, error)
+	WriteProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier, value interface{}) error
 }
 
 func NewClient(address string, port int) (Client, error) {
 }
 
-func (c *client) ReadProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier) (Value, error) {
+func (c *client) ReadProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier) (interface{}, error) {
 }
 
-func (c *client) WriteProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier, value Value) error {
+func (c *client) WriteProperty(objectID ObjectIdentifier, propertyID PropertyIdentifier, value interface{}) error {
 }

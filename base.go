@@ -91,27 +91,6 @@ const (
 	CharacterISO8859  BacnetCharacterStringEncodings = 5
 )
 
-type BACnetApplicationTag int
-
-const (
-	Null BACnetApplicationTag = iota
-	Boolean
-	UnsignedInt
-	SignedInt
-	Real
-	Double
-	OctetString
-	CharacterString
-	BitString
-	Enumerated
-	Date
-	Time
-	BACnetObjectIdentifier
-	Reserve1
-	Reserve2
-	Reserve3
-)
-
 type BacnetNpduControl int
 
 const (
@@ -307,11 +286,3 @@ const (
 	DuplicateEntry
 	InvalidValueInThisState
 )
-
-type ObjectIdentifier struct {
-	Type     ObjectType
-	Instance int
-}
-
-func (oi *ObjectIdentifier) ASN1decode() {
-}
