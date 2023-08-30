@@ -61,3 +61,18 @@ func EncodeSigned(value int32) []byte {
 		return buf.Bytes()
 	}
 }
+
+func EncodeContextUnsigned(tagNum BACnetApplicationTag, val uint32) []byte {
+	len := 0
+	switch {
+	case val < 0x100:
+		len = 1
+	case val < 0x10000:
+		len = 2
+	case val < 0x1000000:
+		len = 3
+	default:
+		len = 4
+	}
+	return append(EncodeTag(tagNum, true, len), EncodeUnsigned(val)...)
+}

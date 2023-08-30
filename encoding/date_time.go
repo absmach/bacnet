@@ -2,10 +2,6 @@ package encoding
 
 import "time"
 
-type DateTime struct {
-	Date time.Time
-}
-
 func DecodeApplicationDate(buf []byte, offset int) (int, time.Time) {
 	len, tagNum := decodeTagNumber(buf, offset)
 	if tagNum == byte(Date) {
@@ -63,21 +59,10 @@ func decodeBACnetTimeSafe(buf []byte, offset int, lenVal int) (int, time.Time) {
 	return decodeBACnetTime(buf, offset)
 }
 
-func (dt *DateTime) Decode(buf []byte, offset int) int {
-	len, date := DecodeApplicationDate(buf, offset)
-	len1, ttime := DecodeApplicationTime(buf, offset+len)
-	dt.Date = ttime.AddDate(date.Year(), int(date.Month()), date.Day())
-	return len + len1
-}
-
-func (dt *DateTime) Encode() []byte {
-	return append(encodeApplicationDate(dt.Date), encodeApplicationTime(dt.Date)...)
-}
-
-func encodeApplicationDate(date time.Time) []byte {
+func EncodeApplicationDate(date time.Time) []byte {
 	return append(EncodeTag(Date, false, 4), encodeBacnetDate(date)...)
 }
-func encodeApplicationTime(date time.Time) []byte {
+func EncodeApplicationTime(date time.Time) []byte {
 	return append(EncodeTag(Time, false, 4), encodeBacnetTime(date)...)
 }
 

@@ -33,19 +33,19 @@ func (oi *ObjectIdentifier) DecodeContext(buf []byte, offset, apdu_len int, tagN
 	return -1
 }
 
-func (oi *ObjectIdentifier) Encode() []byte {
+func (oi ObjectIdentifier) Encode() []byte {
 	value := uint32(oi.Type)&encoding.MaxObject<<encoding.InstanceBits | (uint32(oi.Instance) & encoding.MaxInstance)
 	result := make([]byte, 4)
 	binary.BigEndian.PutUint32(result, value)
 	return result
 }
 
-func (oi *ObjectIdentifier) EncodeApp() []byte {
+func (oi ObjectIdentifier) EncodeApp() []byte {
 	tmp := oi.Encode()
 	return append(encoding.EncodeTag(encoding.BACnetObjectIdentifier, false, len(tmp)), tmp...)
 }
 
-func (oi *ObjectIdentifier) EncodeCOntext(tagNum int) []byte {
+func (oi ObjectIdentifier) EncodeContext(tagNum int) []byte {
 	tmp := oi.Encode()
 	return append(encoding.EncodeTag(encoding.BACnetApplicationTag(tagNum), true, len(tmp)), tmp...)
 }
