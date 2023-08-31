@@ -7,3 +7,9 @@ func DecodeUnsigned(buffer []byte, offset, len int) (int, uint32) {
 	}
 	return len, value
 }
+
+func DecodeOctetString(buf []byte, offset, lenVal int) (int, []byte) {
+	tmp := make([]byte, lenVal)
+	copy(tmp, buf[offset:offset+lenVal])
+	return len(tmp), tmp
+}
