@@ -47,17 +47,6 @@ const (
 	MaxSEG65 BacnetMaxSegments = 0x70
 )
 
-type BacnetMaxAdpu int
-
-const (
-	MaxAPDU50 BacnetMaxAdpu = iota
-	MaxAPDU128
-	MaxAPDU206
-	MaxAPDU480
-	MaxAPDU1024
-	MaxAPDU1476
-)
-
 type BacnetPduTypes int
 
 const (

@@ -115,14 +115,21 @@ func (nci *NPDUControlInformation) Decode(buffer []byte, offset int) int {
 	return 0
 }
 
-func NewNPDU(destination *BACnetAddress, source *BACnetAddress, hopCount int, vendorID int) *NPDU {
+func NewNPDU(destination *BACnetAddress, source *BACnetAddress, hopCount *uint8, vendorID *uint16) *NPDU {
 	npdu := &NPDU{
 		Version:     1,
 		Control:     *NewNPDUControlInformation(),
 		Destination: destination,
 		Source:      source,
-		HopCount:    uint8(hopCount),
-		VendorID:    uint16(vendorID),
+	}
+	switch hopCount {
+	case nil:
+		npdu.HopCount = 255
+	default:
+		npdu.HopCount = *hopCount
+	}
+	if vendorID != nil {
+		npdu.VendorID = *vendorID
 	}
 
 	if destination != nil && destination.NetworkNumber > 0 {
