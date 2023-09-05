@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/absmach/bacnet/encoding"
+	"github.com/absmach/bacnet/pkg/encoding"
 )
 
 type BACnetNetworkType int

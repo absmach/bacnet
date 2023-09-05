@@ -3,7 +3,7 @@ package bacnet
 import (
 	"time"
 
-	"github.com/absmach/bacnet/encoding"
+	"github.com/absmach/bacnet/pkg/encoding"
 )
 
 type DateTime struct {

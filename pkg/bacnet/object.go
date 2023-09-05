@@ -3,7 +3,7 @@ package bacnet
 import (
 	"encoding/binary"
 
-	"github.com/absmach/bacnet/encoding"
+	"github.com/absmach/bacnet/pkg/encoding"
 )
 
 type ObjectInstance uint32

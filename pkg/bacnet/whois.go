@@ -1,6 +1,6 @@
 package bacnet
 
-import "github.com/absmach/bacnet/encoding"
+import "github.com/absmach/bacnet/pkg/encoding"
 
 type WhoIs struct {
 	HighLimit, LowLimit *uint32

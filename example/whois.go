@@ -6,8 +6,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/absmach/bacnet"
-	"github.com/absmach/bacnet/transport"
+	"github.com/absmach/bacnet/pkg/bacnet"
+	"github.com/absmach/bacnet/pkg/transport"
+	"github.com/absmach/bacnet/pkg/transport/udp"
 )
 
 func main() {
@@ -19,10 +20,14 @@ func main() {
 	}
 	whoisBytes := req.Encode()
 
+	broads, err := udp.GetBroadcastAddress("127.0.0.6", 47809)
+	if err != nil {
+		log.Fatalf("failed to encode npdu with error %v", err)
+	}
 	netType := bacnet.IPV4
-	source := bacnet.NewBACnetAddress(20, []byte{}, "127.0.0.255:47809", &netType)
+	broads = *bacnet.NewBACnetAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
 
-	npdu := bacnet.NewNPDU(source, nil, nil, nil)
+	npdu := bacnet.NewNPDU(&broads, nil, nil, nil)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
 	npduBytes, err := npdu.Encode()
 	if err != nil {
@@ -39,16 +44,12 @@ func main() {
 	mes := append(npduBytes, apduBytes...)
 	mes = append(mes, whoisBytes...)
 
-	fmt.Println(mes)
-
 	blvc := bacnet.NewBVLC(transport.IP)
-	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)))
+	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+4))
 	message := append(blvcBytes, mes...)
 
-	fmt.Println(message)
-
 	// Define the BACnet broadcast address (255.255.255.255:47808)
-	remoteAddr, err := net.ResolveUDPAddr("udp", "255.255.255.255:47809")
+	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.255:47809")
 	if err != nil {
 		fmt.Println("Error resolving remote address:", err)
 		return
@@ -65,8 +66,7 @@ func main() {
 	// Send the WhoIsRequest packet
 	_, err = conn.Write(message)
 	if err != nil {
-		fmt.Println("Error sending WhoIsRequest:", err)
-		return
+		log.Fatal("Error sending WhoIsRequest:", err)
 	}
 
 	// Wait for responses
@@ -78,15 +78,15 @@ func main() {
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// Timeout reached, no more responses
-				fmt.Println("No more responses received.")
+				log.Println("No more responses received.")
 				break
 			}
-			fmt.Println("Error reading response:", err)
+			log.Println("Error reading response:", err)
 			break
 		}
 
 		// Process the response (you'll need to parse BACnet responses here)
 		response := buffer[:n]
-		fmt.Printf("Received response: %X\n", response)
+		log.Printf("Received response: %X\n", response)
 	}
 }

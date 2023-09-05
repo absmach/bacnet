@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/absmach/bacnet/transport"
+	"github.com/absmach/bacnet/pkg/transport"
 )
 
 var (
