@@ -37,7 +37,7 @@ func isClosingTag(b byte) bool {
 	return (b & 0x07) == 7
 }
 
-func isContextSpecific(b byte) bool {
+func IsContextSpecific(b byte) bool {
 	return (b & 0x8) == 0x8
 }
 
@@ -50,15 +50,15 @@ func decodeTagNumber(buf []byte, offset int) (len int, tagNum byte) {
 	return len, buf[offset] >> 4
 }
 
-func DecodeIsCOntextTag(buf []byte, offset int, tagNum byte) bool {
+func IsContextTag(buf []byte, offset int, tagNum byte) bool {
 	_, myTagNum := decodeTagNumber(buf, offset)
-	return isContextSpecific(buf[offset]) && myTagNum == tagNum
+	return IsContextSpecific(buf[offset]) && myTagNum == tagNum
 
 }
 
-func DecodeIsCOntextTagWithLength(buf []byte, offset int, tagNum byte) (int, bool) {
+func IsContextTagWithLength(buf []byte, offset int, tagNum byte) (int, bool) {
 	tagLen, myTagNum := decodeTagNumber(buf, offset)
-	return tagLen, isContextSpecific(buf[offset]) && myTagNum == tagNum
+	return tagLen, IsContextSpecific(buf[offset]) && myTagNum == tagNum
 }
 
 func DecodeTagNumberAndValue(buf []byte, offset int) (len int, tagNum byte, val uint32) {

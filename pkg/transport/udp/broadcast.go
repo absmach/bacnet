@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/absmach/bacnet/pkg/bacnet"
+	"github.com/absmach/bacnet/pkg/encoding"
 )
 
 func GetBroadcastAddress(localEndpoint string, port int) (bacnet.BACnetAddress, error) {
@@ -32,7 +33,7 @@ func GetBroadcastAddress(localEndpoint string, port int) (bacnet.BACnetAddress, 
 			}
 		}
 	}
-	netType := bacnet.IPV4
+	netType := encoding.IPV4
 	return *bacnet.NewBACnetAddress(0xFFFF, nil, broadcast+":"+strconv.Itoa(port), &netType), nil
 
 }

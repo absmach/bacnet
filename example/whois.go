@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/absmach/bacnet/pkg/bacnet"
+	"github.com/absmach/bacnet/pkg/encoding"
 	"github.com/absmach/bacnet/pkg/transport"
 	"github.com/absmach/bacnet/pkg/transport/udp"
 )
@@ -24,7 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to encode npdu with error %v", err)
 	}
-	netType := bacnet.IPV4
+	netType := encoding.IPV4
 	broads = *bacnet.NewBACnetAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
 
 	npdu := bacnet.NewNPDU(&broads, nil, nil, nil)
