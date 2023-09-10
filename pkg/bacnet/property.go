@@ -24,7 +24,7 @@ func (r ReadPropertyRequest) Encode() []byte {
 		ret = append(ret, r.ObjectIdentifier.EncodeContext(0)...)
 	}
 
-	propID := r.PropertyIdentifier.(int)
+	propID := r.PropertyIdentifier.(encoding.PropertyIdentifier)
 
 	ret = append(ret, encoding.EncodeContextEnumerated(1, uint32(propID))...)
 

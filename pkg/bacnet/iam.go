@@ -1,10 +1,9 @@
 package bacnet
 
-/*
 import (
 	"errors"
 
-	"github.com/absmach/bacnet/encoding"
+	"github.com/absmach/bacnet/pkg/encoding"
 )
 
 type IAmRequest struct {
@@ -27,8 +26,7 @@ func (iam *IAmRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, 
 
 	leng = iam.IamDeviceIdentifier.Decode(buffer, offset+leng, int(lenValue))
 
-	if iam.IamDeviceIdentifier.Type != ObjectTypeDevice {
-		// Handle error or log message
+	if iam.IamDeviceIdentifier.Type != encoding.ObjectTypeDevice {
 		return -1, errors.New("Got Iam from no device")
 	}
 
@@ -49,7 +47,7 @@ func (iam *IAmRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, 
 	if tagNumber != byte(Enumerated) {
 		return -1, errors.New("Invalid tag number")
 	}
-	segmentationSupported, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, SegmentationSupported)
+	segmentationSupported, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, encoding.SegmentationSupported)
 	if err != nil {
 		return -1, err
 	}
@@ -167,4 +165,3 @@ func (youAre *YouAreRequest) ASN1Encode() []byte {
 
 	return buffer
 }
-*/

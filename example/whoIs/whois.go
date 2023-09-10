@@ -50,14 +50,20 @@ func main() {
 	message := append(blvcBytes, mes...)
 
 	// Define the BACnet broadcast address (255.255.255.255:47808)
-	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.255:47809")
+	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.6:47809")
 	if err != nil {
 		fmt.Println("Error resolving remote address:", err)
 		return
 	}
 
+	localAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
 	// Create a UDP connectionBACnetAddress
-	conn, err := net.DialUDP("udp", nil, remoteAddr)
+	conn, err := net.DialUDP("udp", localAddr, remoteAddr)
 	if err != nil {
 		fmt.Println("Error creating UDP connection:", err)
 		return
@@ -89,5 +95,6 @@ func main() {
 		// Process the response (you'll need to parse BACnet responses here)
 		response := buffer[:n]
 		log.Printf("Received response: %X\n", response)
+		fmt.Println(response)
 	}
 }

@@ -71,7 +71,7 @@ func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface
 		}
 	case ObjectIdentifier:
 		if *netType == encoding.IPV4 {
-			addr.MacAddress = make([]byte, 6)
+			addr.MacAddress = make([]byte, 8)
 			binary.LittleEndian.PutUint64(addr.MacAddress, uint64(addr1.Instance))
 		}
 	}

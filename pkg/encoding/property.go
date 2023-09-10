@@ -561,10 +561,10 @@ const (
 type BACnetSegmentation int
 
 const (
-	SEGMENTED_BOTH BACnetSegmentation = iota
-	SEGMENTED_TRANSMIT
-	SEGMENTED_RECEIVE
-	NO_SEGMENTATION
+	SegmentedBoth BACnetSegmentation = iota
+	SegmentedTransmit
+	SegmentedReceive
+	NoSegmentation
 )
 
 type BACnetEventType int
