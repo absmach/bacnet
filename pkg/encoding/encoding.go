@@ -76,3 +76,33 @@ func EncodeContextUnsigned(tagNum BACnetApplicationTag, val uint32) []byte {
 	}
 	return append(EncodeTag(tagNum, true, len), EncodeUnsigned(val)...)
 }
+
+// EncodeApplicationUnsigned encodes an unsigned integer value as a BACnet application tag.
+func EncodeApplicationUnsigned(value uint32) []byte {
+	tmp := EncodeUnsigned(value)
+	tag := EncodeTag(UnsignedInt, false, len(tmp))
+	return append(tag, tmp...)
+}
+
+func EncodeApplicationEnumerated(value uint32) []byte {
+	tmp := EncodeUnsigned(value)
+	return append(EncodeTag(Enumerated, false, len(tmp)), tmp...)
+}
+
+func EncodeApplicationOctetString(octetString []byte, octetOffset, octetCount int) []byte {
+	tag := EncodeTag(OctetString, false, octetCount)
+	octetStringSegment := octetString[octetOffset : octetOffset+octetCount]
+	return append(tag, octetStringSegment...)
+}
+
+func EncodeApplicationCharacterString(value string) []byte {
+	tmp := encodeBACnetCharacterString(value)
+	tag := EncodeTag(CharacterString, false, len(tmp))
+	return append(tag, tmp...)
+}
+
+func encodeBACnetCharacterString(value string) []byte {
+	encoding := []byte{byte(CharacterUTF8)}
+	encodedValue := []byte(value)
+	return append(encoding, encodedValue...)
+}

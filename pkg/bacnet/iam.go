@@ -9,11 +9,11 @@ import (
 type IAmRequest struct {
 	IamDeviceIdentifier   ObjectIdentifier
 	MaxAPDULengthAccepted uint32
-	SegmentationSupported int
+	SegmentationSupported interface{}
 	VendorID              uint32
 }
 
-func (iam *IAmRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, error) {
+func (iam *IAmRequest) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 	iam.IamDeviceIdentifier = ObjectIdentifier{}
 	// OBJECT ID - object id
@@ -47,10 +47,8 @@ func (iam *IAmRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, 
 	if tagNumber != byte(Enumerated) {
 		return -1, errors.New("Invalid tag number")
 	}
-	segmentationSupported, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, encoding.SegmentationSupported)
-	if err != nil {
-		return -1, err
-	}
+	propID := encoding.SegmentationSupported
+	leng1, segmentationSupported := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
 	leng += leng1
 	iam.SegmentationSupported = segmentationSupported
 
@@ -63,9 +61,6 @@ func (iam *IAmRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, 
 	}
 
 	leng1, decodedValue = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
-	if err != nil {
-		return -1, err
-	}
 
 	leng += leng1
 	if decodedValue > 0xFFFF {
@@ -76,9 +71,10 @@ func (iam *IAmRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, 
 	return leng, nil
 }
 
-func (iam *IAmRequest) ASN1Encode() []byte {
+func (iam IAmRequest) Encode() []byte {
 	tmp := iam.IamDeviceIdentifier.Encode()
-	return append(append(append(append([]byte{}, encoding.EncodeTag(encoding.BACnetApplicationTag(BACnetObjectIdentifier), false, len(tmp))...), tmp...), encoding.EncodeApplicationUnsigned(iam.MaxAPDULengthAccepted)...), encoding.EncodeApplicationEnumerated(iam.SegmentationSupported, SegmentationSupported), encoding.EncodeApplicationUnsigned(iam.VendorID)...)
+	propID := iam.SegmentationSupported.(encoding.PropertyIdentifier)
+	return append(append(append(append(encoding.EncodeTag(encoding.BACnetApplicationTag(BACnetObjectIdentifier), false, len(tmp)), tmp...), encoding.EncodeApplicationUnsigned(iam.MaxAPDULengthAccepted)...), encoding.EncodeApplicationEnumerated(uint32(propID))...), encoding.EncodeApplicationUnsigned(iam.VendorID)...)
 }
 
 type YouAreRequest struct {
@@ -89,7 +85,7 @@ type YouAreRequest struct {
 	DeviceMACAddress []byte
 }
 
-func (youAre *YouAreRequest) ASN1Decode(buffer []byte, offset int, apduLen int) (int, error) {
+func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
@@ -105,11 +101,9 @@ func (youAre *YouAreRequest) ASN1Decode(buffer []byte, offset int, apduLen int) 
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
 	if tagNumber == byte(CharacterString) {
-		decodedValue, err := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, lenValue)
-		if err != nil {
-			return -1, err
-		}
-		leng += decodedValue
+		leng1, decodedValue := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
+
+		leng += leng1
 		youAre.ModelName = decodedValue
 	} else {
 		return -1, errors.New("Invalid tag number")
@@ -118,11 +112,8 @@ func (youAre *YouAreRequest) ASN1Decode(buffer []byte, offset int, apduLen int) 
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
 	if tagNumber == byte(CharacterString) {
-		decodedValue, err := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, lenValue)
-		if err != nil {
-			return -1, err
-		}
-		leng += decodedValue
+		leng1, decodedValue := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
+		leng += leng1
 		youAre.SerialNumber = decodedValue
 	} else {
 		return -1, errors.New("Invalid tag number")
@@ -150,7 +141,7 @@ func (youAre *YouAreRequest) ASN1Decode(buffer []byte, offset int, apduLen int) 
 	return leng, nil
 }
 
-func (youAre *YouAreRequest) ASN1Encode() []byte {
+func (youAre YouAreRequest) Encode() []byte {
 	buffer := append(append(append([]byte{}, encoding.EncodeApplicationUnsigned(youAre.VendorID)...),
 		encoding.EncodeApplicationCharacterString(youAre.ModelName)...),
 		encoding.EncodeApplicationCharacterString(youAre.SerialNumber)...)

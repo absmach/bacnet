@@ -55,8 +55,8 @@ const (
 	NegativeAck
 	// TODO
 	SegmentResponseAccepted
-	MORE_FOLLOWS
-	SEGMENTED_MESSAGE                BacnetPduTypes = 8
+	MoreFollows
+	SegmentedMessage                 BacnetPduTypes = 8
 	PDUTypeUnconfirmedServiceRequest BacnetPduTypes = 0x10
 	PDUTypeSimpleAck                 BacnetPduTypes = 0x20
 	PDUTypeComplexAck                BacnetPduTypes = 0x30
@@ -65,19 +65,6 @@ const (
 	PDUTypeReject                    BacnetPduTypes = 0x60
 	PDUTypeAbort                     BacnetPduTypes = 0x70
 	PDUTypeMask                      BacnetPduTypes = 0xF0
-)
-
-type BacnetCharacterStringEncodings int
-
-const (
-	CharacterANSIX34  BacnetCharacterStringEncodings = 0
-	CharacterUTF8     BacnetCharacterStringEncodings = 0
-	CharacterMSDBCS   BacnetCharacterStringEncodings = 1
-	CharacterJISC6226 BacnetCharacterStringEncodings = 2
-	CharacterJISX0208 BacnetCharacterStringEncodings = 2
-	CharacterUCS4     BacnetCharacterStringEncodings = 3
-	CharacterUCS2     BacnetCharacterStringEncodings = 4
-	CharacterISO8859  BacnetCharacterStringEncodings = 5
 )
 
 type BacnetNpduControl int
