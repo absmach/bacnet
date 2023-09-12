@@ -41,15 +41,6 @@ func IsContextSpecific(b byte) bool {
 	return (b & 0x8) == 0x8
 }
 
-func decodeTagNumber(buf []byte, offset int) (len int, tagNum byte) {
-	len = 1
-
-	if isExtendedTagNumber(buf[offset]) {
-		return len + 1, buf[offset+len]
-	}
-	return len, buf[offset] >> 4
-}
-
 func IsContextTag(buf []byte, offset int, tagNum byte) bool {
 	_, myTagNum := decodeTagNumber(buf, offset)
 	return IsContextSpecific(buf[offset]) && myTagNum == tagNum
@@ -90,8 +81,9 @@ func DecodeTagNumberAndValue(buf []byte, offset int) (len int, tagNum byte, val 
 
 }
 
-func DecodeTagNumber(buf []byte, offset int) (len int, tagNum byte) {
+func decodeTagNumber(buf []byte, offset int) (len int, tagNum byte) {
 	len = 1
+
 	if isExtendedTagNumber(buf[offset]) {
 		return len + 1, buf[offset+len]
 	}
@@ -131,4 +123,14 @@ func EncodeTag(tagNum BACnetApplicationTag, ctxSpecific bool, lenVal int) []byte
 		tag = append(tag, 255)
 		return append(tag, EncodeUnsigned(uint32(lenVal))...)
 	}
+}
+
+func IsOpeningTagNumber(buf []byte, offset int, tagNum byte) bool {
+	_, myTagNum := decodeTagNumber(buf, offset)
+	return isOpeningTag(buf[offset]) && myTagNum == tagNum
+}
+
+func IsClosingTagNumber(buf []byte, offset int, tagNum byte) bool {
+	_, myTagNum := decodeTagNumber(buf, offset)
+	return isClosingTag(buf[offset]) && myTagNum == tagNum
 }

@@ -1,5 +1,11 @@
 package encoding
 
+import (
+	"encoding/binary"
+	"math"
+	"time"
+)
+
 type BacnetCharacterStringEncodings int
 
 const (
@@ -92,4 +98,49 @@ func decodeContextCharacterString(buffer []byte, offset, maxLength int, tagNumbe
 	}
 
 	return leng, charString
+}
+
+func DecodeSigned(buffer []byte, offset int, lenValue int) (int, int) {
+	value := 0
+	for i := 0; i < lenValue; i++ {
+		value += int(buffer[offset+i]) << uint(8*(lenValue-i-1))
+	}
+	// Check if it is negative
+	if value > int(math.Pow(256, float64(lenValue))/2)-1 {
+		value = -(int(math.Pow(256, float64(lenValue))) - value)
+	}
+	return lenValue, value
+}
+
+func decodeReal(buffer []byte, offset int) (int, float32) {
+	value := binary.BigEndian.Uint32(buffer[offset : offset+4])
+	return 4, math.Float32frombits(value)
+}
+
+func DecodeRealSafe(buffer []byte, offset int, lenValue int) (int, float32) {
+	if lenValue != 4 {
+		value := float32(0.0)
+		return lenValue, value
+	}
+	return decodeReal(buffer, offset)
+}
+
+func decodeDouble(buffer []byte, offset int) (int, float64) {
+	value := binary.BigEndian.Uint64(buffer[offset : offset+8])
+	return 8, math.Float64frombits(value)
+}
+
+func DecodeDoubleSafe(buffer []byte, offset int, lenValue int) (int, float64) {
+	if lenValue != 8 {
+		value := float64(0.0)
+		return lenValue, value
+	}
+	return decodeDouble(buffer, offset)
+}
+
+func DecodeBACnetTimeSafe(buf []byte, offset, lenVal int) (int, time.Time) {
+	if lenVal != 4 {
+		return lenVal, time.Time{}
+	}
+	return decodeBACnetTime(buf, offset)
 }

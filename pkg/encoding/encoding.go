@@ -3,6 +3,7 @@ package encoding
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 )
 
 const (
@@ -105,4 +106,36 @@ func encodeBACnetCharacterString(value string) []byte {
 	encoding := []byte{byte(CharacterUTF8)}
 	encodedValue := []byte(value)
 	return append(encoding, encodedValue...)
+}
+
+func EncodeApplicationBoolean(val bool) []byte {
+	if val {
+		return EncodeTag(Boolean, false, 1)
+	}
+	return EncodeTag(Boolean, false, 0)
+}
+
+func EncodeApplicationSigned(val int32) []byte {
+	tmp := EncodeSigned(val)
+	return append(EncodeTag(SignedInt, false, len(tmp)), tmp...)
+}
+
+func EncodeApplicationReal(val float32) []byte {
+	return append(EncodeTag(Real, false, 4), encodeBACnetReal(val)...)
+}
+
+func EncodeApplicationDouble(val float64) []byte {
+	return append(EncodeTag(Double, false, 8), encodeBACnetDouble(val)...)
+}
+
+func encodeBACnetReal(value float32) []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, math.Float32bits(value))
+	return buf
+}
+
+func encodeBACnetDouble(value float64) []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, math.Float64bits(value))
+	return buf
 }

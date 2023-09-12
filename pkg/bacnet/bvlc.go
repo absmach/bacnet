@@ -3,6 +3,7 @@ package bacnet
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/absmach/bacnet/pkg/transport"
 )
@@ -13,6 +14,7 @@ var (
 	errUnsupportedFunction  = errors.New("unsupported BVLC function")
 )
 
+//go:generate stringer -type=BVLCFunctions
 type BVLCFunctions int
 
 const (
@@ -60,22 +62,23 @@ func NewBVLC(transprt transport.Transport) *BVLC {
 	return bvlc
 }
 
-func (bvlc *BVLC) Decode(buffer []byte, offset int) (int, byte, uint16, error) {
+func (bvlc *BVLC) Decode(buffer []byte, offset int) (int, BVLCFunctions, uint16, error) {
 	msgType := buffer[0]
 	function := BVLCFunctions(buffer[1])
 	msgLength := binary.BigEndian.Uint16(buffer[2:4])
 
 	if msgType != bvlc.BVLLTypeBACnetIP || msgLength != uint16(len(buffer)) {
+		fmt.Println(msgType, bvlc.BVLLTypeBACnetIP, msgLength, uint16(len(buffer)))
 		return 0, 0, 0, errUnsupportedTransport
 	}
 
 	switch function {
 	case BVLCResult:
-		return 4, byte(function), msgLength, nil
+		return 4, function, msgLength, nil
 	case BVLCOriginalUnicastNPDU:
-		return 4, byte(function), msgLength, nil
+		return 4, function, msgLength, nil
 	case BVLCOriginalBroadcastNPDU:
-		return 4, byte(function), msgLength, nil
+		return 4, function, msgLength, nil
 	case BVLCForwardedNPDU:
 		// Handle this case
 	case BVLCDistributeBroadcastToNetwok:

@@ -2,6 +2,7 @@ package bacnet
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/absmach/bacnet/pkg/encoding"
 )
@@ -13,7 +14,7 @@ type IAmRequest struct {
 	VendorID              uint32
 }
 
-func (iam *IAmRequest) Decode(buffer []byte, offset int, apduLen int) (int, error) {
+func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 	leng := 0
 	iam.IamDeviceIdentifier = ObjectIdentifier{}
 	// OBJECT ID - object id
@@ -21,6 +22,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int, apduLen int) (int, erro
 	leng += leng1
 
 	if tagNumber != byte(BACnetObjectIdentifier) {
+		fmt.Println("tag num object id", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 
@@ -34,6 +36,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int, apduLen int) (int, erro
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
 	if tagNumber != byte(UnsignedInt) {
+		fmt.Println("tag num max apdu", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 
@@ -45,6 +48,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int, apduLen int) (int, erro
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
 	if tagNumber != byte(Enumerated) {
+		fmt.Println("tag num segmentation", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 	propID := encoding.SegmentationSupported
@@ -57,6 +61,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int, apduLen int) (int, erro
 	leng += leng1
 
 	if tagNumber != byte(UnsignedInt) {
+		fmt.Println("tag num vendor ID", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 
