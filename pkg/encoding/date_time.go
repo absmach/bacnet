@@ -31,7 +31,7 @@ func decodeDate(buf []byte, offset int) (int, time.Time) {
 	return 4, time.Date(int(year)+1900, time.Month(month), int(day), 0, 0, 0, 0, nil)
 }
 
-func decodeDateSafe(buf []byte, offset, lenVal int) (int, time.Time) {
+func DecodeDateSafe(buf []byte, offset, lenVal int) (int, time.Time) {
 	if lenVal != 4 {
 		return lenVal, time.Time{}
 	}

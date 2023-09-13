@@ -137,7 +137,7 @@ type BACnetValue struct {
 	Value interface{}
 }
 
-func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encoding.ObjectType, propID encoding.PropertyIdentifier) int {
+func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encoding.ObjectType, propID encoding.PropertyIdentifier) (int, error) {
 	length := 0
 	var err error
 
@@ -167,7 +167,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 					length--
 					decodeLen, err = bv.Value.(*RouterEntry).Decode(buffer, offset+length, apduLen)
 					if err != nil {
-						return -1
+						return -1, err
 					}
 				} else if propID == encoding.ActiveVtSessions {
 					bv.Tag = nil
@@ -214,7 +214,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 				case encoding.StatusFlags:
 					bv.Tag = nil
 					bitValue := &BACnetStatusFlags{}
-					decodeLen = bitValue.Decode(buffer, offset, lenValueType)
+					decodeLen = bitValue.Decode(buffer, offset, int(lenValueType))
 					bv.Value = bitValue
 				case encoding.EventEnable, encoding.AckedTransitions:
 					bv.Tag = nil
@@ -224,33 +224,35 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 				case encoding.LimitEnable:
 					bv.Tag = nil
 					bitValue := &BACnetLimitEnable{}
-					decodeLen = bitValue.Decode(buffer, offset, lenValueType)
+					decodeLen = bitValue.Decode(buffer, offset, int(lenValueType))
 					bv.Value = bitValue
 				case encoding.ProtocolObjectTypesSupported:
 					bv.Tag = nil
 					bitValue := &BACnetObjectTypesSupported{}
-					decodeLen = bitValue.Decode(buffer, offset, lenValueType)
+					decodeLen = bitValue.Decode(buffer, offset, int(lenValueType))
 					bv.Value = bitValue
 				case encoding.ProtocolServicesSupported:
 					bv.Tag = nil
 					bitValue := &BACnetServicesSupported{}
-					decodeLen = bitValue.Decode(buffer, offset, lenValueType)
+					decodeLen = bitValue.Decode(buffer, offset, int(lenValueType))
 					bv.Value = bitValue
 				default:
 					bitValue := &BACnetBitString{}
-					decodeLen = bitValue.Decode(buffer, offset, lenValueType)
+					decodeLen = bitValue.Decode(buffer, offset, int(lenValueType))
 					bv.Value = bitValue
 				}
 			case Enumerated:
-				decodeLen, uintValue := encoding.DecodeEnumerated(buffer, offset+length, lenValueType, objType, propID)
-				bv.Value = uintValue
+				decodeLen, bv.Value = encoding.DecodeEnumerated(buffer, offset+length, lenValueType, &objType, &propID)
 			case Date:
 				switch propID {
 				case encoding.EffectivePeriod:
 					bv.Tag = nil
-					bv.Value = NewBACnetDateRange()
+					bv.Value = &BACnetDateRange{}
 					length--
-					decodeLen = bv.Value.(*BACnetDateRange).Decode(buffer, offset+length, apduLen)
+					decodeLen, err = bv.Value.(*BACnetDateRange).Decode(buffer, offset+length, apduLen)
+					if err != nil {
+						return -1, err
+					}
 				case encoding.MinimumValueTimestamp,
 					encoding.MaximumValueTimestamp,
 					encoding.ChangeOfStateTime,
@@ -273,23 +275,20 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 					length--
 					decodeLen = bv.Value.(*DateTime).Decode(buffer, offset+length)
 				default:
-					decodeLen, dateValue := encoding.DecodeDateSafe(buffer, offset+length, lenValueType)
-					bv.Value = dateValue
+					decodeLen, bv.Value = encoding.DecodeDateSafe(buffer, offset+length, int(lenValueType))
 				}
 				if (objType == encoding.DateTimeValue || objType == encoding.TimePatternValue) && (propID == encoding.PresentValue || propID == encoding.RelinquishDefault) {
-					decodeLen, dateValue := encoding.DecodeDateSafe(buffer, offset+length, lenValueType)
-					bv.Value = dateValue
+					decodeLen, bv.Value = encoding.DecodeDateSafe(buffer, offset+length, int(lenValueType))
 				}
 			case Time:
-				decodeLen, timeValue := encoding.DecodeBACnetTimeSafe(buffer, offset+length, lenValueType)
-				bv.Value = timeValue
+				decodeLen, bv.Value = encoding.DecodeBACnetTimeSafe(buffer, offset+length, int(lenValueType))
 			case BACnetObjectIdentifier:
 				if propID == encoding.LastKeyServer ||
 					propID == encoding.ManualSlaveAddressBinding ||
 					propID == encoding.SlaveAddressBinding ||
 					propID == encoding.DeviceAddressBinding {
 					bv.Tag = nil
-					bv.Value = NewBACnetAddressBinding()
+					bv.Value = &BACnetAddressBinding{}
 					length--
 					decodeLen = bv.Value.(*BACnetAddressBinding).Decode(buffer, offset+length, apduLen)
 				} else {
@@ -302,7 +301,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 			}
 
 			if decodeLen < 0 {
-				return -1
+				return -1, fmt.Errorf("no tags decoded")
 			}
 			length += decodeLen
 		}
@@ -1223,4 +1222,251 @@ func (e *BACnetEventTransitionBits) ToNormal() bool {
 // SetToNormal sets the value of ToNormal property.
 func (e *BACnetEventTransitionBits) SetToNormal(a bool) {
 	e.BitString.Value.Set(2, a)
+}
+
+// BACnetStatusFlags represents a BACnet status flags.
+type BACnetStatusFlags struct {
+	unusedbits   int
+	bitstring    BACnetBitString
+	inalarm      bool
+	fault        bool
+	overridden   bool
+	outofservice bool
+}
+
+// NewBACnetStatusFlags creates a new BACnetStatusFlags instance.
+func NewBACnetStatusFlags() *BACnetStatusFlags {
+	return &BACnetStatusFlags{
+		unusedbits:   4,
+		bitstring:    *NewBACnetBitString(4, *internal.NewBitArrayFromByte(0x00)),
+		inalarm:      false,
+		fault:        false,
+		overridden:   false,
+		outofservice: false,
+	}
+}
+
+// ASN1decode decodes BACnetStatusFlags from a buffer.
+func (s *BACnetStatusFlags) Decode(buffer []byte, offset, apduLen int) int {
+	s.bitstring = *NewBACnetBitString(byte(s.unusedbits), *internal.NewBitArrayFromByte(0x00))
+	return s.bitstring.Decode(buffer, offset, apduLen)
+}
+
+// InAlarm returns the inalarm property.
+func (s *BACnetStatusFlags) InAlarm() bool {
+	return s.bitstring.Value.Get(0)
+}
+
+// SetInAlarm sets the inalarm property.
+func (s *BACnetStatusFlags) SetInAlarm(a bool) {
+	s.bitstring.Value.Set(0, a)
+}
+
+// Fault returns the fault property.
+func (s *BACnetStatusFlags) Fault() bool {
+	return s.bitstring.Value.Get(1)
+}
+
+// SetFault sets the fault property.
+func (s *BACnetStatusFlags) SetFault(a bool) {
+	s.bitstring.Value.Set(1, a)
+}
+
+// Overridden returns the overridden property.
+func (s *BACnetStatusFlags) Overridden() bool {
+	return s.bitstring.Value.Get(2)
+}
+
+// SetOverridden sets the overridden property.
+func (s *BACnetStatusFlags) SetOverridden(a bool) {
+	s.bitstring.Value.Set(2, a)
+}
+
+// OutOfService returns the outofservice property.
+func (s *BACnetStatusFlags) OutOfService() bool {
+	return s.bitstring.Value.Get(3)
+}
+
+// SetOutOfService sets the outofservice property.
+func (s *BACnetStatusFlags) SetOutOfService(a bool) {
+	s.bitstring.Value.Set(3, a)
+}
+
+type BACnetLimitEnable struct {
+	unusedBits      uint8
+	bitString       BACnetBitString
+	lowLimitEnable  bool
+	highLimitEnable bool
+}
+
+func NewBACnetLimitEnable() *BACnetLimitEnable {
+	return &BACnetLimitEnable{
+		unusedBits:      6,
+		bitString:       *NewBACnetBitString(6, *internal.NewBitArrayFromByte(0x00)),
+		lowLimitEnable:  false,
+		highLimitEnable: false,
+	}
+}
+
+func (b *BACnetLimitEnable) Decode(buffer []byte, offset, apduLen int) int {
+	b.bitString = *NewBACnetBitString(0, *internal.NewBitArrayFromByte(0x00))
+	return b.bitString.Decode(buffer, offset, apduLen)
+}
+
+func (b *BACnetLimitEnable) LowLimitEnable() bool {
+	return b.bitString.Value.Get(0)
+}
+
+func (b *BACnetLimitEnable) SetLowLimitEnable(a bool) {
+	b.bitString.Value.Set(0, a)
+}
+
+func (b *BACnetLimitEnable) HighLimitEnable() bool {
+	return b.bitString.Value.Get(1)
+}
+
+func (b *BACnetLimitEnable) SetHighLimitEnable(a bool) {
+	b.bitString.Value.Set(1, a)
+}
+
+type BACnetObjectTypesSupported struct {
+	unusedbits uint8
+	bitstring  BACnetBitString
+}
+
+type ObjectTypesSupportedProperty int
+
+const (
+	AnalogInput ObjectTypesSupportedProperty = iota
+	AanalofOutput
+	AnalogValue
+	BinaryInput
+	BinaryOutput
+	// TODO Add other properties here
+)
+
+func NewBACnetObjectTypesSupported() *BACnetObjectTypesSupported {
+	return &BACnetObjectTypesSupported{
+		unusedbits: 3,
+		bitstring:  *NewBACnetBitString(3, *internal.NewBitArray(64)),
+	}
+}
+
+func (b *BACnetObjectTypesSupported) Set(property ObjectTypesSupportedProperty, value bool) {
+	b.bitstring.Value.Set(int(property), value)
+}
+
+func (b *BACnetObjectTypesSupported) Get(property ObjectTypesSupportedProperty) bool {
+	return b.bitstring.Value.Get(int(property))
+}
+
+func (b *BACnetObjectTypesSupported) Decode(buf []byte, offset, apduLen int) int {
+	return b.bitstring.Decode(buf, offset, apduLen)
+}
+
+type BACnetServicesSupported struct {
+	unusedbits uint8
+	bitstring  BACnetBitString
+}
+
+type ServicesSupportedProperty int
+
+// TODO check index sequence
+const (
+	acknowledgeAlarm ServicesSupportedProperty = iota
+	confirmedCOVNotification
+	confirmedCOVNotificationMultiple
+	confirmedEventNotification
+	getAlarmSummary
+	getEnrollmentSummary
+	getEventInformation
+	lifeSafetyOperation
+	subscribeCOV
+	subscribeCOVProperty
+	subscribeCOVPropertyMultiple
+	atomicReadFile
+	atomicWriteFile
+	addListElement
+	removeListElement
+	createObject
+	deleteObject
+	readProperty
+	readPropertyMultiple
+	readRange
+	writeGroup
+	writeProperty
+	writePropertyMultiple
+	deviceCommunicationControl
+	confirmedPrivateTransfer
+	confirmedTextMessage
+	reinitializeDevice
+	vtOpen
+	vtClose
+	vtData
+	whoAmI
+	youAre
+	iAm
+	iHave
+	unconfirmedCOVNotification
+	unconfirmedCOVNotificationMultiple
+	unconfirmedEventNotification
+	unconfirmedPrivateTransfer
+	unconfirmedTextMessage
+	timeSynchronization
+	utcTimeSynchronization
+	whoHas
+	whoIs
+)
+
+func NewBACnetServicesSupported() *BACnetServicesSupported {
+	return &BACnetServicesSupported{
+		unusedbits: 7,
+		bitstring:  *NewBACnetBitString(7, *internal.NewBitArrayFromByte(0x00000000000000)),
+	}
+}
+
+func (b *BACnetServicesSupported) Set(property ServicesSupportedProperty, value bool) {
+	b.bitstring.Value.Set(int(property), value)
+}
+
+func (b *BACnetServicesSupported) Get(property ServicesSupportedProperty) bool {
+	return b.bitstring.Value.Get(int(property))
+}
+
+func (b *BACnetServicesSupported) Decode(buf []byte, offset, apduLen int) int {
+	return b.bitstring.Decode(buf, offset, apduLen)
+}
+
+// BACnetDateRange is a struct representing a date range in BACnet.
+type BACnetDateRange struct {
+	StartDate time.Time
+	EndDate   time.Time
+}
+
+// Decode decodes a BACnetDateRange from the given buffer, offset, and length.
+func (dr *BACnetDateRange) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	var leng int
+
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber == byte(Date) {
+		leng += leng1
+		leng1, startDate := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
+		dr.StartDate = startDate
+		leng += leng1
+	} else {
+		return -1, fmt.Errorf("Unexpected tag number: %v", tagNumber)
+	}
+
+	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber == byte(Date) {
+		leng += leng1
+		leng1, endDate := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
+
+		dr.EndDate = endDate
+		leng += leng1
+	} else {
+		return -1, fmt.Errorf("Unexpected tag number: %v", tagNumber)
+	}
+
+	return leng, nil
 }
