@@ -86,7 +86,7 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 		leng1 := r.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
 		leng += leng1
 	} else {
-		return -1, errors.New("ASN.1 decoding error for object_identifier")
+		return -1, errors.New("decoding error for object_identifier")
 	}
 
 	// 2 propertyidentifier
@@ -98,7 +98,7 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 		r.PropertyIdentifier = propID
 		leng += leng1
 	} else {
-		return -1, errors.New("ASN.1 decoding error for property_identifier")
+		return -1, errors.New("decoding error for property_identifier")
 	}
 
 	// 2 property_array_index
@@ -116,17 +116,20 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 		for !encoding.IsClosingTagNumber(buffer, offset+leng, 3) && leng < apduLen {
 			bValue := BACnetValue{}
 			propId := r.PropertyIdentifier.(encoding.PropertyIdentifier)
-			leng1 := bValue.Decode(buffer, offset+leng, apduLen-leng, r.ObjectIdentifier.Type, propId)
+			leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng, r.ObjectIdentifier.Type, propId)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			r.PropertyValue = append(r.PropertyValue, bValue)
 		}
 		if encoding.IsClosingTagNumber(buffer, offset+leng, 3) {
 			leng++
 		} else {
-			return -1, errors.New("ASN.1 decoding error for property_value")
+			return -1, errors.New("decoding error for property_value")
 		}
 	} else {
-		return -1, errors.New("ASN.1 decoding error for property_value")
+		return -1, errors.New("decoding error for property_value")
 	}
 
 	return leng, nil
@@ -292,8 +295,10 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 					length--
 					decodeLen = bv.Value.(*BACnetAddressBinding).Decode(buffer, offset+length, apduLen)
 				} else {
-					decodeLen, objectType, instance := encoding.DecodeObjectIDSafe(buffer, offset+length, lenValueType)
-					bv.Value = ObjectIdentifier{Type: objectType, Instance: instance}
+					var objectType encoding.ObjectType
+					var instance uint32
+					decodeLen, objectType, instance = encoding.DecodeObjectIDSafe(buffer, offset+length, lenValueType)
+					bv.Value = ObjectIdentifier{Type: objectType, Instance: ObjectInstance(instance)}
 				}
 			default:
 				log.Println("Unhandled tag:", bv.Tag)
@@ -308,17 +313,25 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 	} else {
 		switch propID {
 		case encoding.BacnetIpGlobalAddress, encoding.FdBbmdAddress:
-			bv.Value = NewBACnetHostNPort()
-			length += bv.Value.(*BACnetHostNPort).Decode(buffer, offset+length, apduLen-length)
+			bv.Value = &BACnetHostNPort{}
+			length1, err := bv.Value.(*BACnetHostNPort).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.UtcTimeSynchronizationRecipients,
 			encoding.RestartNotificationRecipients,
 			encoding.TimeSynchronizationRecipients,
 			encoding.CovuRecipients:
-			bv.Value = NewBACnetRecipient()
+			bv.Value = &BACnetRecipient{}
 			length += bv.Value.(*BACnetRecipient).Decode(buffer, offset+length, apduLen-length)
 		case encoding.KeySets:
-			bv.Value = NewBACnetSecurityKeySet()
-			length += bv.Value.(*BACnetSecurityKeySet).Decode(buffer, offset+length, apduLen-length)
+			bv.Value = &BACnetSecurityKeySet{}
+			length1, err := bv.Value.(*BACnetSecurityKeySet).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.EventTimeStamps,
 			encoding.LastCommandTime,
 			encoding.CommandTimeArray,
@@ -326,13 +339,17 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 			encoding.TimeOfDeviceRestart,
 			encoding.AccessEventTime,
 			encoding.UpdateTime:
-			bv.Value = NewBACnetTimeStamp()
-			length += bv.Value.(*BACnetTimeStamp).Decode(buffer, offset+length, apduLen-length)
+			bv.Value = &BACnetTimeStamp{}
+			length1, err := bv.Value.(*BACnetTimeStamp).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.ListOfGroupMembers:
-			bv.Value = NewReadAccessSpecification()
+			bv.Value = &ReadAccessSpecification{}
 			length += bv.Value.(*ReadAccessSpecification).Decode(buffer, offset+length, apduLen-length)
 		case encoding.ListOfObjectPropertyReferences:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
+			bv.Value = &BACnetDeviceObjectPropertyReference{}
 			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
 		case encoding.MemberOf,
 			encoding.ZoneMembers,
@@ -1246,7 +1263,7 @@ func NewBACnetStatusFlags() *BACnetStatusFlags {
 	}
 }
 
-// ASN1decode decodes BACnetStatusFlags from a buffer.
+// decode decodes BACnetStatusFlags from a buffer.
 func (s *BACnetStatusFlags) Decode(buffer []byte, offset, apduLen int) int {
 	s.bitstring = *NewBACnetBitString(byte(s.unusedbits), *internal.NewBitArrayFromByte(0x00))
 	return s.bitstring.Decode(buffer, offset, apduLen)
@@ -1469,4 +1486,258 @@ func (dr *BACnetDateRange) Decode(buffer []byte, offset, apduLen int) (int, erro
 	}
 
 	return leng, nil
+}
+
+type BACnetAddressBinding struct {
+	DeviceIdentifier ObjectIdentifier
+	DeviceAddress    BACnetAddress
+}
+
+func (binding *BACnetAddressBinding) Decode(buffer []byte, offset int, apduLen int) int {
+	length := 0
+	length1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+length)
+
+	// device_identifier
+	if tagNumber == byte(BACnetObjectIdentifier) {
+		length += length1
+		binding.DeviceIdentifier = ObjectIdentifier{}
+		length += binding.DeviceIdentifier.Decode(buffer, offset+length, int(lenValue))
+	} else {
+		return -1
+	}
+
+	length1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+
+	if tagNumber == byte(UnsignedInt) {
+		binding.DeviceAddress = BACnetAddress{}
+		length += binding.DeviceAddress.Decode(buffer, offset+length, int(lenValue))
+	} else {
+		return -1
+	}
+
+	return length
+}
+
+type BACnetHostNPort struct {
+	Host *BACnetHostAddress
+	Port uint32
+}
+
+func (b *BACnetHostNPort) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+
+	if !encoding.IsOpeningTagNumber(buffer, offset+leng, 0) {
+		return -1, errors.New("Invalid opening tag")
+	}
+	leng++
+	b.Host = &BACnetHostAddress{}
+	hostLen, err := b.Host.Decode(buffer, offset+leng, apduLen-leng)
+	if err != nil {
+		return -1, err
+	}
+	leng += hostLen
+	leng++
+
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 1 {
+			leng1, b.Port = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number")
+		}
+	} else {
+		return -1, errors.New("Invalid context tag")
+	}
+
+	return leng, nil
+}
+
+type BACnetHostAddress struct {
+	Value interface{}
+}
+
+func (b *BACnetHostAddress) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+
+	switch tagNumber {
+	case byte(Null):
+		leng += leng1
+		b.Value = nil
+	case byte(OctetString):
+		leng += leng1
+		leng1, octetString := encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
+		b.Value = octetString
+		leng += leng1
+	case byte(CharacterString):
+		leng += leng1
+		leng1, characterString := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
+		b.Value = characterString
+		leng += leng1
+	default:
+		return -1, errors.New("Invalid tag number")
+	}
+
+	return leng, nil
+}
+
+type BACnetSecurityKeySet struct {
+	KeyRevision    uint32
+	ActivationTime *DateTime
+	ExpirationTime *DateTime
+	KeyIDs         []*BACnetKeyIdentifier
+}
+
+func (b *BACnetSecurityKeySet) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+
+	// key_revision
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 0 {
+			leng1, b.KeyRevision = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number")
+		}
+	} else {
+		return -1, errors.New("Invalid context tag")
+	}
+
+	// activation_time
+	if encoding.IsOpeningTagNumber(buffer, offset+leng, 1) {
+		leng++
+		b.ActivationTime = &DateTime{}
+		leng1 := b.ActivationTime.Decode(buffer, offset+leng)
+		leng += leng1
+	} else {
+		return -1, errors.New("Invalid opening tag for activation_time")
+	}
+
+	// expiration_time
+	if encoding.IsOpeningTagNumber(buffer, offset+leng, 2) {
+		leng++
+		b.ExpirationTime = &DateTime{}
+		leng1 := b.ExpirationTime.Decode(buffer, offset+leng)
+		leng += leng1
+	} else {
+		return -1, errors.New("Invalid opening tag for expiration_time")
+	}
+
+	b.KeyIDs = make([]*BACnetKeyIdentifier, 0)
+	if encoding.IsOpeningTagNumber(buffer, offset+leng, 3) && leng < apduLen {
+		leng++
+		for !encoding.IsClosingTagNumber(buffer, offset+leng, 3) {
+			bValue := &BACnetKeyIdentifier{}
+			leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng)
+			if err != nil {
+				return -1, err
+			}
+			b.KeyIDs = append(b.KeyIDs, bValue)
+			leng += leng1
+		}
+		leng++
+	} else {
+		return -1, errors.New("Invalid opening tag for key_ids or unexpected end of data")
+	}
+
+	return leng, nil
+}
+
+type BACnetKeyIdentifier struct {
+	Algorithm uint32
+	KeyID     uint32
+}
+
+func (b *BACnetKeyIdentifier) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+
+	// algorithm
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 0 {
+			leng1, b.Algorithm = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number for algorithm")
+		}
+	} else {
+		return -1, errors.New("Invalid context tag for algorithm")
+	}
+
+	// key_id
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 1 {
+			leng1, b.KeyID = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number for key_id")
+		}
+	} else {
+		return -1, errors.New("Invalid context tag for key_id")
+	}
+
+	return leng, nil
+}
+
+type BACnetTimeStamp struct {
+	Value interface{}
+}
+
+func (b *BACnetTimeStamp) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+	if encoding.IsContextTag(buffer, offset+leng, 2) {
+		// BACnetDateTime
+		leng1, tagNumber, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 2 {
+			b.Value = &DateTime{}
+			leng1 := b.Value.(*DateTime).Decode(buffer, offset+leng)
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number for BACnetDateTime")
+		}
+	} else if encoding.IsContextTag(buffer, offset+leng, 1) {
+		// sequence number
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 1 {
+			leng1, seqNum := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			b.Value = seqNum
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number for sequence number")
+		}
+	} else if encoding.IsContextTag(buffer, offset+leng, 0) {
+		// time
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		if tagNumber == 0 {
+			leng1, bacnetTime := encoding.DecodeBACnetTimeSafe(buffer, offset+leng, int(lenValue))
+			b.Value = bacnetTime
+			leng += leng1
+		} else {
+			return -1, errors.New("Invalid tag number for time")
+		}
+	} else {
+		return -1, errors.New("Invalid context tag")
+	}
+
+	return leng, nil
+}
+
+func (b *BACnetTimeStamp) Encode() []byte {
+	// Implement the encoding logic as needed for your specific application.
+	return nil
+}
+
+func (b *BACnetTimeStamp) EncodeContext(tagNumber encoding.BACnetApplicationTag) []byte {
+	tmp := b.Encode()
+	return append(encoding.EncodeTag(tagNumber, true, len(tmp)), tmp...)
 }

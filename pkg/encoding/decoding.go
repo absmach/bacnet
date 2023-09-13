@@ -144,3 +144,23 @@ func DecodeBACnetTimeSafe(buf []byte, offset, lenVal int) (int, time.Time) {
 	}
 	return decodeBACnetTime(buf, offset)
 }
+
+func decodeObjectID(buffer []byte, offset int) (int, ObjectType, uint32) {
+	var value uint32
+	var leng int
+
+	leng, value = DecodeUnsigned(buffer, offset, 4)
+
+	objectInstance := value & MaxInstance
+
+	objectType := ObjectType((int(value) >> InstanceBits) & MaxObject)
+
+	return leng, objectType, objectInstance
+}
+
+func DecodeObjectIDSafe(buffer []byte, offset int, lenValue uint32) (int, ObjectType, uint32) {
+	if lenValue != 4 {
+		return 0, 0, 0
+	}
+	return decodeObjectID(buffer, offset)
+}
