@@ -347,10 +347,16 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 			length += length1
 		case encoding.ListOfGroupMembers:
 			bv.Value = &ReadAccessSpecification{}
-			length += bv.Value.(*ReadAccessSpecification).Decode(buffer, offset+length, apduLen-length)
+			length, err = bv.Value.(*ReadAccessSpecification).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
 		case encoding.ListOfObjectPropertyReferences:
 			bv.Value = &BACnetDeviceObjectPropertyReference{}
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
+			length, err = bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
 		case encoding.MemberOf,
 			encoding.ZoneMembers,
 			encoding.DoorMembers,
@@ -371,33 +377,36 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 			encoding.BelongsTo,
 			encoding.LastAccessPoint,
 			encoding.EnergyMeterRef:
-			bv.Value = NewBACnetDeviceObjectReference()
+			bv.Value = &BACnetDeviceObjectReference{}
 			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
 		case encoding.EventAlgorithmInhibitRef,
 			encoding.InputReference,
 			encoding.ManipulatedVariableReference,
 			encoding.ControlledVariableReference:
-			bv.Value = NewBACnetObjectPropertyReference()
+			bv.Value = &BACnetObjectPropertyReference{}
 			length += bv.Value.(*BACnetObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
 		case encoding.LoggingRecord:
-			bv.Value = NewBACnetAccumulatorRecord()
-			length += bv.Value.(*BACnetAccumulatorRecord).Decode(buffer, offset+length, apduLen-length)
+			bv.Value = &BACnetAccumulatorRecord{}
+			length, err = bv.Value.(*BACnetAccumulatorRecord).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
 		case encoding.Action:
-			bv.Value = NewBACnetActionList()
+			bv.Value = &BACnetActionList{}
 			length += bv.Value.(*BACnetActionList).Decode(buffer, offset+length, apduLen-length)
 		case encoding.Scale:
-			bv.Value = NewBACnetScale()
+			bv.Value = &BACnetScale{}
 			length += bv.Value.(*BACnetScale).Decode(buffer, offset+length, apduLen-length)
 		case encoding.LightingCommand:
-			bv.Value = NewBACnetLightingCommand()
+			bv.Value = &BACnetLightingCommand{}
 			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
 		case encoding.Prescale:
-			bv.Value = NewBACnetPrescale()
+			bv.Value = &BACnetPrescale{}
 			length += bv.Value.(*BACnetPrescale).Decode(buffer, offset+length, apduLen-length)
 		case encoding.RequestedShedLevel,
 			encoding.ExpectedShedLevel,
 			encoding.ActualShedLevel:
-			bv.Value = NewBACnetShedLevel()
+			bv.Value = &BACnetShedLevel{}
 			length += bv.Value.(*BACnetShedLevel).Decode(buffer, offset+length, apduLen-length)
 		case encoding.LogBuffer:
 			if objType == encoding.TrendLog {
@@ -1740,4 +1749,407 @@ func (b *BACnetTimeStamp) Encode() []byte {
 func (b *BACnetTimeStamp) EncodeContext(tagNumber encoding.BACnetApplicationTag) []byte {
 	tmp := b.Encode()
 	return append(encoding.EncodeTag(tagNumber, true, len(tmp)), tmp...)
+}
+
+// ReadAccessSpecification represents a BACnet Read Access Specification.
+type ReadAccessSpecification struct {
+	ObjectIdentifier         ObjectIdentifier
+	ListOfPropertyReferences []BACnetPropertyReference
+}
+
+// Decode decodes the ReadAccessSpecification from the buffer.
+func (ras *ReadAccessSpecification) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+
+	// ObjectIdentifier
+	ras.ObjectIdentifier = ObjectIdentifier{}
+	leng += ras.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+
+	// ListOfPropertyReferences
+	if buffer[offset+leng] == 0x30 { // Check for opening tag (0x30)
+		leng++
+
+		ras.ListOfPropertyReferences = make([]BACnetPropertyReference, 0)
+
+		for apduLen-leng > 1 && buffer[offset+leng] != 0x00 { // Check for closing tag (0x00)
+			bValue := BACnetPropertyReference{}
+			leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng)
+			if err != nil {
+				return -1, err
+			}
+			leng += leng1
+
+			ras.ListOfPropertyReferences = append(ras.ListOfPropertyReferences, bValue)
+		}
+	} else {
+		return -1, errors.New("Invalid opening tag for ListOfPropertyReferences")
+	}
+
+	leng++
+
+	return leng, nil
+}
+
+// BACnetPropertyReference represents a BACnet property reference.
+type BACnetPropertyReference struct {
+	PropertyIdentifier interface{}
+	PropertyArrayIndex uint32
+}
+
+// Decode decodes the BACnetPropertyReference from the buffer.
+func (ref *BACnetPropertyReference) Decode(buffer []byte, offset, apduLen int) (int, error) {
+	leng := 0
+
+	// propertyIdentifier
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		propID := encoding.PropertyList
+		leng1, ref.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng += leng1
+	} else {
+		return -1, errors.New("Missing context tag for PropertyIdentifier")
+	}
+
+	if leng < apduLen {
+		if encoding.IsContextTag(buffer, offset+leng, 1) && !encoding.IsClosingTagNumber(buffer, offset+leng, 1) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, ref.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	return leng, nil
+}
+
+type BACnetDeviceObjectPropertyReference struct {
+	ObjectIdentifier   ObjectIdentifier
+	PropertyIdentifier interface{}
+	PropertyArrayIndex uint32
+	DeviceIdentifier   ObjectIdentifier
+}
+
+func (bdopr *BACnetDeviceObjectPropertyReference) Decode(buffer []byte, offset int, apduLen int) (int, error) {
+	leng := 0
+
+	// tag 0 objectidentifier
+	bdopr.ObjectIdentifier = ObjectIdentifier{}
+	leng1 := bdopr.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if leng1 < 0 {
+		return -1, errors.New("failed to decode object identifier")
+	}
+	leng += leng1
+
+	// tag 1 propertyidentifier
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		propID := encoding.PropertyList
+		leng1, bdopr.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng += leng1
+	} else {
+		return -1, errors.New("Missing tag property Identifier")
+	}
+
+	if leng < apduLen {
+		// tag 2 property-array-index optional
+		if encoding.IsContextTag(buffer, offset+leng, 2) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, bdopr.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// tag 3 device-identifier optional
+		bdopr.DeviceIdentifier = ObjectIdentifier{}
+		leng1 := bdopr.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 3)
+		if leng1 < 0 {
+			return -1, errors.New("failed to decode device identifier")
+		}
+		leng += leng1
+	}
+
+	return leng, nil
+}
+
+type BACnetDeviceObjectReference struct {
+	DeviceIdentifier ObjectIdentifier
+	ObjectIdentifier ObjectIdentifier
+}
+
+func (bdor *BACnetDeviceObjectReference) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	// tag 0 device-identifier optional
+	bdor.DeviceIdentifier = ObjectIdentifier{}
+	leng1 := bdor.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if leng1 > 0 {
+		leng += leng1
+	}
+
+	// tag 1 objectidentifier
+	bdor.ObjectIdentifier = ObjectIdentifier{}
+	leng1 = bdor.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 1)
+	if leng1 < 0 {
+		return -1
+	}
+	leng += leng1
+
+	return leng
+}
+
+type BACnetObjectPropertyReference struct {
+	ObjectIdentifier   ObjectIdentifier
+	PropertyIdentifier interface{}
+	PropertyArrayIndex uint32
+}
+
+func (bopr *BACnetObjectPropertyReference) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	// tag 0 objectidentifier
+	bopr.ObjectIdentifier = ObjectIdentifier{}
+	leng1 := bopr.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if leng1 < 0 {
+		return -1
+	}
+	leng += leng1
+
+	// tag 1 propertyidentifier
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		propID := encoding.PropertyList
+		leng1, bopr.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng += leng1
+	} else {
+		return -1
+	}
+
+	if leng < apduLen {
+		// tag 2 property-array-index optional
+		if encoding.IsContextTag(buffer, offset+leng, 2) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, bopr.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	return leng
+}
+
+type BACnetAccumulatorRecord struct {
+	Timestamp         BACnetTimeStamp
+	PresentValue      uint32
+	AccumulatedValue  uint32
+	AccumulatorStatus BACnetAccumulatorStatus
+}
+
+type BACnetAccumulatorStatus int
+
+const (
+	AccumulatorStatusNormal BACnetAccumulatorStatus = iota
+	AccumulatorStatusStarting
+	AccumulatorStatusRecovered
+	AccumulatorStatusAbnormal
+	AccumulatorStatusFailed
+)
+
+func (bar *BACnetAccumulatorRecord) Decode(buffer []byte, offset int, apduLen int) (int, error) {
+	leng := 0
+
+	// 0 timestamp
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		bar.Timestamp = BACnetTimeStamp{}
+		leng1, err := bar.Timestamp.Decode(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, errors.New("failed to decode timestamp")
+		}
+	} else {
+		return -1, errors.New("Missing tag 0")
+	}
+
+	// 1 present-value
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bar.PresentValue = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else {
+		return -1, errors.New("Missing tag 1")
+	}
+
+	// 2 accumulated-value
+	if encoding.IsContextTag(buffer, offset+leng, 2) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bar.AccumulatedValue = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else {
+		return -1, errors.New("Missing tag 2")
+	}
+
+	// 3 accumulator-status
+	if encoding.IsContextTag(buffer, offset+leng, 3) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, statusValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		bar.AccumulatorStatus = BACnetAccumulatorStatus(statusValue)
+		leng += leng1
+	} else {
+		return -1, errors.New("Missing tag 3")
+	}
+
+	return leng, nil
+}
+
+type BACnetActionList struct {
+	Action []BACnetActionCommand
+}
+
+func (bal *BACnetActionList) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	// SEQUENCE OF BACnetActionCommand
+	if encoding.IsOpeningTagNumber(buffer, offset+leng, 0) {
+		leng += 1
+		bal.Action = make([]BACnetActionCommand, 0)
+		for !encoding.IsClosingTagNumber(buffer, offset+leng, 0) {
+			bac := BACnetActionCommand{}
+			leng1 := bac.Decode(buffer, offset+leng, apduLen-leng)
+			if leng1 < 0 {
+				return -1
+			}
+			leng += leng1
+			bal.Action = append(bal.Action, bac)
+		}
+		leng += 1
+	}
+
+	return leng
+}
+
+type BACnetActionCommand struct {
+	DeviceIdentifier   ObjectIdentifier
+	ObjectIdentifier   ObjectIdentifier
+	PropertyIdentifier interface{}
+	PropertyArrayIndex int
+	PropertyValue      []BACnetValue
+	Priority           int
+	PostDelay          int
+	QuitOnFailure      bool
+	WriteSuccessful    bool
+}
+
+func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	// 0 device_identifier optional
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		bac.DeviceIdentifier = ObjectIdentifier{}
+		leng += bac.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	}
+
+	// 1 object_identifier
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		bac.ObjectIdentifier = ObjectIdentifier{}
+		leng += bac.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 1)
+	} else {
+		return -1
+	}
+
+	// 2 property_identifier
+	if encoding.IsContextTag(buffer, offset+leng, 2) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		propID := encoding.PropertyList
+		leng1, bac.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if leng1 < 0 {
+			return -1
+		}
+		leng += leng1
+	} else {
+		return -1
+	}
+
+	// 3 property_array_index
+	if encoding.IsContextTag(buffer, offset+leng, 3) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		bac.PropertyArrayIndex, _ = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	}
+
+	// tag 4 property-value
+	if encoding.IsOpeningTagNumber(buffer, offset+leng, 4) {
+		leng += 1
+		bac.PropertyValue = []BACnetValue{}
+		for !encoding.IsClosingTagNumber(buffer, offset+leng, 4) && leng < apduLen {
+			bv := BACnetValue{}
+			propID := bac.PropertyIdentifier.(encoding.PropertyIdentifier)
+			leng1, _ := bv.Decode(buffer, offset+leng, apduLen-leng, bac.ObjectIdentifier.Type, propID)
+			if leng1 < 0 {
+				return -1
+			}
+			leng += leng1
+			bac.PropertyValue = append(bac.PropertyValue, bv)
+		}
+		if encoding.IsClosingTagNumber(buffer, offset+leng, 4) {
+			leng += 1
+		} else {
+			return -1
+		}
+	} else {
+		return -1
+	}
+
+	if leng < apduLen {
+		// tag 5 priority optional
+		if encoding.IsContextTag(buffer, offset+leng, 5) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			bac.Priority, _ = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// tag 6 post-delay optional
+		if encoding.IsContextTag(buffer, offset+leng, 6) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			bac.PostDelay, _ = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// tag 7 quit-on-failure optional
+		if encoding.IsContextTag(buffer, offset+leng, 7) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			uVal, _ := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+			bac.QuitOnFailure = uVal > 0
+		}
+	}
+
+	if leng < apduLen {
+		// tag 8 write-successful optional
+		if encoding.IsContextTag(buffer, offset+leng, 8) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			uVal, _ := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+			bac.WriteSuccessful = uVal > 0
+		}
+	}
+
+	return leng
 }
