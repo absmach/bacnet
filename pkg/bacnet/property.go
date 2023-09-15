@@ -116,7 +116,7 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 		for !encoding.IsClosingTagNumber(buffer, offset+leng, 3) && leng < apduLen {
 			bValue := BACnetValue{}
 			propId := r.PropertyIdentifier.(encoding.PropertyIdentifier)
-			leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng, r.ObjectIdentifier.Type, propId)
+			leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng, &r.ObjectIdentifier.Type, &propId)
 			if err != nil {
 				return -1, err
 			}
@@ -140,7 +140,7 @@ type BACnetValue struct {
 	Value interface{}
 }
 
-func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encoding.ObjectType, propID encoding.PropertyIdentifier) (int, error) {
+func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encoding.ObjectType, propID *encoding.PropertyIdentifier) (int, error) {
 	length := 0
 	var err error
 
@@ -164,7 +164,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 					bv.Value = false
 				}
 			case UnsignedInt:
-				if propID == encoding.RoutingTable {
+				if *propID == encoding.RoutingTable {
 					bv.Tag = nil
 					bv.Value = &RouterEntry{}
 					length--
@@ -172,12 +172,12 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 					if err != nil {
 						return -1, err
 					}
-				} else if propID == encoding.ActiveVtSessions {
+				} else if *propID == encoding.ActiveVtSessions {
 					bv.Tag = nil
 					bv.Value = &BACnetVTSession{}
 					length--
 					decodeLen = bv.Value.(*BACnetVTSession).Decode(buffer, offset+length, apduLen)
-				} else if propID == encoding.ThreatLevel || propID == encoding.ThreatAuthority {
+				} else if *propID == encoding.ThreatLevel || *propID == encoding.ThreatAuthority {
 					bv.Tag = nil
 					bv.Value = &BACnetAccessThreatLevel{}
 					length--
@@ -208,7 +208,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 				decodeLen, stringValue = encoding.DecodeCharacterString(buffer, offset+length, apduLen, int(lenValueType))
 				bv.Value = stringValue
 			case BitString:
-				switch propID {
+				switch *propID {
 				case encoding.RecipientList:
 					bv.Tag = nil
 					bv.Value = &BACnetDestination{}
@@ -245,9 +245,9 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 					bv.Value = bitValue
 				}
 			case Enumerated:
-				decodeLen, bv.Value = encoding.DecodeEnumerated(buffer, offset+length, lenValueType, &objType, &propID)
+				decodeLen, bv.Value = encoding.DecodeEnumerated(buffer, offset+length, lenValueType, objType, propID)
 			case Date:
-				switch propID {
+				switch *propID {
 				case encoding.EffectivePeriod:
 					bv.Tag = nil
 					bv.Value = &BACnetDateRange{}
@@ -280,16 +280,16 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 				default:
 					decodeLen, bv.Value = encoding.DecodeDateSafe(buffer, offset+length, int(lenValueType))
 				}
-				if (objType == encoding.DateTimeValue || objType == encoding.TimePatternValue) && (propID == encoding.PresentValue || propID == encoding.RelinquishDefault) {
+				if (*objType == encoding.DateTimeValue || *objType == encoding.TimePatternValue) && (*propID == encoding.PresentValue || *propID == encoding.RelinquishDefault) {
 					decodeLen, bv.Value = encoding.DecodeDateSafe(buffer, offset+length, int(lenValueType))
 				}
 			case Time:
 				decodeLen, bv.Value = encoding.DecodeBACnetTimeSafe(buffer, offset+length, int(lenValueType))
 			case BACnetObjectIdentifier:
-				if propID == encoding.LastKeyServer ||
-					propID == encoding.ManualSlaveAddressBinding ||
-					propID == encoding.SlaveAddressBinding ||
-					propID == encoding.DeviceAddressBinding {
+				if *propID == encoding.LastKeyServer ||
+					*propID == encoding.ManualSlaveAddressBinding ||
+					*propID == encoding.SlaveAddressBinding ||
+					*propID == encoding.DeviceAddressBinding {
 					bv.Tag = nil
 					bv.Value = &BACnetAddressBinding{}
 					length--
@@ -311,7 +311,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 			length += decodeLen
 		}
 	} else {
-		switch propID {
+		switch *propID {
 		case encoding.BacnetIpGlobalAddress, encoding.FdBbmdAddress:
 			bv.Value = &BACnetHostNPort{}
 			length1, err := bv.Value.(*BACnetHostNPort).Decode(buffer, offset+length, apduLen-length)
@@ -409,473 +409,102 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 			bv.Value = &BACnetShedLevel{}
 			length += bv.Value.(*BACnetShedLevel).Decode(buffer, offset+length, apduLen-length)
 		case encoding.LogBuffer:
-			if objType == encoding.TrendLog {
-				bv.Value = NewBACnetLogRecord()
-				length += bv.Value.(*BACnetLogRecord).Decode(buffer, offset+length, apduLen-length)
-			} else {
-				log.Println("Unhandled context-specific tag:", bv.Tag)
-				length = apduLen
+			switch *objType {
+			case encoding.TrendLog:
+				bv.Value = &BACnetLogRecord{}
+				length += bv.Value.(*BACnetLogRecord).Decode(buffer, offset+length, apduLen-length, nil, nil)
+			case encoding.EventLog:
+				bv.Value = &BACnetEventLogRecord{}
+				length += bv.Value.(*BACnetEventLogRecord).Decode(buffer, offset+length, apduLen-length)
 			}
 		case encoding.DateList:
-			bv.Value = NewBACnetCalendarEntry()
+			bv.Value = &BACnetCalendarEntry{}
 			length += bv.Value.(*BACnetCalendarEntry).Decode(buffer, offset+length, apduLen-length)
-		case encoding.LogBuffer:
-			if objType == encoding.EventLog {
-				bv.Value = NewBACnetEventLogRecord()
-				length += bv.Value.(*BACnetEventLogRecord).Decode(buffer, offset+length, apduLen-length)
-			} else {
-				log.Println("Unhandled context-specific tag:", bv.Tag)
-				length = apduLen
-			}
 		case encoding.PresentValue:
-			if objType == encoding.Group {
-				bv.Value = NewReadAccessResult()
+			switch *objType {
+			case encoding.Group:
+				bv.Value = &ReadAccessResult{}
 				length += bv.Value.(*ReadAccessResult).Decode(buffer, offset+length, apduLen-length)
-			} else {
-				log.Println("Unhandled context-specific tag:", bv.Tag)
-				length = apduLen
+			case encoding.Channel:
+				bv.Value = &BACnetChannelValue{}
+				length += bv.Value.(*BACnetChannelValue).Decode(buffer, offset+length, apduLen-length)
+			case encoding.GlobalGroup:
+				bv.Value = &BACnetPropertyAccessResult{}
+				length += bv.Value.(*BACnetPropertyAccessResult).Decode(buffer, offset+length, apduLen-length)
+			case encoding.CredentialDataInput:
+				bv.Value = &BACnetAuthenticationFactor{}
+				length += bv.Value.(*BACnetAuthenticationFactor).Decode(buffer, offset+length, apduLen-length)
 			}
 		case encoding.NegativeAccessRules,
 			encoding.PositiveAccessRules:
-			bv.Value = NewBACnetAccessRule()
+			bv.Value = &BACnetAccessRule{}
 			length += bv.Value.(*BACnetAccessRule).Decode(buffer, offset+length, apduLen-length)
 		case encoding.Tags:
-			bv.Value = NewBACnetNameValue()
+			bv.Value = &BACnetNameValue{}
 			length += bv.Value.(*BACnetNameValue).Decode(buffer, offset+length, apduLen-length)
 		case encoding.SubordinateTags:
-			bv.Value = NewBACnetNameValueCollection()
+			bv.Value = &BACnetNameValueCollection{}
 			length += bv.Value.(*BACnetNameValueCollection).Decode(buffer, offset+length, apduLen-length)
 		case encoding.NetworkAccessSecurityPolicies:
-			bv.Value = NewBACnetNetworkSecurityPolicy()
+			bv.Value = &BACnetNetworkSecurityPolicy{}
 			length += bv.Value.(*BACnetNetworkSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
 		case encoding.PortFilter:
-			bv.Value = NewBACnetPortPermission()
+			bv.Value = &BACnetPortPermission{}
 			length += bv.Value.(*BACnetPortPermission).Decode(buffer, offset+length, apduLen-length)
 		case encoding.PriorityArray:
-			bv.Value = NewBACnetPriorityArray()
+			bv.Value = &BACnetPriorityArray{}
 			length += bv.Value.(*BACnetPriorityArray).Decode(buffer, offset+length, apduLen-length)
 		case encoding.ProcessIdentifierFilter:
-			bv.Value = NewBACnetProcessIdSelection()
+			bv.Value = &BACnetProcessIdSelection{}
 			length += bv.Value.(*BACnetProcessIdSelection).Decode(buffer, offset+length, apduLen-length)
-		case encoding.GlobalGroup && propID == encoding.PresentValue:
-			bv.Value = NewBACnetPropertyAccessResult()
-			length += bv.Value.(*BACnetPropertyAccessResult).Decode(buffer, offset+length, apduLen-length)
 		case encoding.SetpointReference:
-			bv.Value = NewBACnetSetpointReference()
+			bv.Value = &BACnetSetpointReference{}
 			length += bv.Value.(*BACnetSetpointReference).Decode(buffer, offset+length, apduLen-length)
 		case encoding.ExceptionSchedule:
-			bv.Value = NewBACnetSpecialEvent()
+			bv.Value = &BACnetSpecialEvent{}
 			length += bv.Value.(*BACnetSpecialEvent).Decode(buffer, offset+length, apduLen-length)
 		case encoding.StateChangeValues:
-			bv.Value = NewBACnetTimerStateChangeValue()
+			bv.Value = &BACnetTimerStateChangeValue{}
 			length += bv.Value.(*BACnetTimerStateChangeValue).Decode(buffer, offset+length, apduLen-length)
 		case encoding.ValueSource, encoding.ValueSourceArray:
-			bv.Value = NewBACnetValueSource()
+			bv.Value = &BACnetValueSource{}
 			length += bv.Value.(*BACnetValueSource).Decode(buffer, offset+length, apduLen-length)
 		case encoding.VirtualMacAddressTable:
-			bv.Value = NewBACnetVMACEntry()
+			bv.Value = &BACnetVMACEntry{}
 			length += bv.Value.(*BACnetVMACEntry).Decode(buffer, offset+length, apduLen-length)
 		case encoding.AssignedAccessRights:
-			bv.Value = NewBACnetAssignedAccessRights()
+			bv.Value = &BACnetAssignedAccessRights{}
 			length += bv.Value.(*BACnetAssignedAccessRights).Decode(buffer, offset+length, apduLen-length)
 		case encoding.AssignedLandingCalls:
-			bv.Value = NewBACnetAssignedLandingCalls()
+			bv.Value = &BACnetAssignedLandingCalls{}
 			length += bv.Value.(*BACnetAssignedLandingCalls).Decode(buffer, offset+length, apduLen-length)
-		case encoding.AccessEventAuthenticationFactor,
-			(objType == encoding.CredentialDataInput && propID == encoding.PresentValue):
-			bv.Value = NewBACnetAuthenticationFactor()
+		case encoding.AccessEventAuthenticationFactor:
+			bv.Value = &BACnetAuthenticationFactor{}
 			length += bv.Value.(*BACnetAuthenticationFactor).Decode(buffer, offset+length, apduLen-length)
 		case encoding.SupportedFormats:
-			bv.Value = NewBACnetAuthenticationFactorFormat()
+			bv.Value = &BACnetAuthenticationFactorFormat{}
 			length += bv.Value.(*BACnetAuthenticationFactorFormat).Decode(buffer, offset+length, apduLen-length)
 		case encoding.AuthenticationPolicyList:
-			bv.Value = NewBACnetAuthenticationPolicy()
+			bv.Value = &BACnetAuthenticationPolicy{}
 			length += bv.Value.(*BACnetAuthenticationPolicy).Decode(buffer, offset+length, apduLen-length)
-		case encoding.Channel && propID == encoding.PresentValue:
-			bv.Value = NewBACnetChannelValue()
-			length += bv.Value.(*BACnetChannelValue).Decode(buffer, offset+length, apduLen-length)
 		case encoding.ActiveCovSubscriptions:
-			bv.Value = NewBACnetCOVSubscription()
+			bv.Value = &BACnetCOVSubscription{}
 			length += bv.Value.(*BACnetCOVSubscription).Decode(buffer, offset+length, apduLen-length)
 		case encoding.AuthenticationFactors:
-			bv.Value = NewBACnetCredentialAuthenticationFactor()
+			bv.Value = &BACnetCredentialAuthenticationFactor{}
 			length += bv.Value.(*BACnetCredentialAuthenticationFactor).Decode(buffer, offset+length, apduLen-length)
 		case encoding.WeeklySchedule:
-			bv.Value = NewBACnetDailySchedule()
+			bv.Value = &BACnetDailySchedule{}
 			length += bv.Value.(*BACnetDailySchedule).Decode(buffer, offset+length, apduLen-length)
 		case encoding.SubscribedRecipients:
-			bv.Value = NewBACnetEventNotificationSubscription()
+			bv.Value = &BACnetEventNotificationSubscription{}
 			length += bv.Value.(*BACnetEventNotificationSubscription).Decode(buffer, offset+length, apduLen-length)
 		case encoding.EventParameters:
-			bv.Value = NewBACnetEventParameter()
+			bv.Value = &BACnetEventParameter{}
 			length += bv.Value.(*BACnetEventParameter).Decode(buffer, offset+length, apduLen-length)
 		case encoding.FaultParameters:
-			bv.Value = NewBACnetFaultParameter()
+			bv.Value = &BACnetFaultParameter{}
 			length += bv.Value.(*BACnetFaultParameter).Decode(buffer, offset+length, apduLen-length)
-		case encoding.LoggingObject:
-			bv.Value = NewBACnetLoggingObject()
-			length += bv.Value.(*BACnetLoggingObject).Decode(buffer, offset+length, apduLen-length)
-		case encoding.LoggingRecord:
-			bv.Value = NewBACnetLoggingRecord()
-			length += bv.Value.(*BACnetLoggingRecord).Decode(buffer, offset+length, apduLen-length)
-		case encoding.ReinitiateDevice:
-			bv.Value = NewBACnetReinitializeDevice()
-			length += bv.Value.(*BACnetReinitializeDevice).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierBACNETIPUDPDATAGRAMCONFIGURATION:
-			bv.Value = NewBACnetBACnetIPUDPDatagramConfiguration()
-			length += bv.Value.(*BACnetBACnetIPUDPDatagramConfiguration).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierREINITIALIZEPARAMETERS:
-			bv.Value = NewBACnetReinitializeParameters()
-			length += bv.Value.(*BACnetReinitializeParameters).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierDISCONNECTEDONEXCEPTION:
-			bv.Value = NewBACnetDisconnect()
-			length += bv.Value.(*BACnetDisconnect).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierNOMINALENCYCLE:
-			bv.Value = NewBACnetNominalBACnetInterval()
-			length += bv.Value.(*BACnetNominalBACnetInterval).Decode(buffer, offset+length, apduLen-length)
-		case encoding.NotifyType:
-			bv.Value = NewBACnetNotifyType()
-			length += bv.Value.(*BACnetNotifyType).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierSUMMATION:
-			bv.Value = NewBACnetEventSummation()
-			length += bv.Value.(*BACnetEventSummation).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSUSERPASSWORD:
-			bv.Value = NewBACnetAccessUserPassword()
-			length += bv.Value.(*BACnetAccessUserPassword).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPULSECONFIGURATION:
-			bv.Value = NewBACnetPulseConverter()
-			length += bv.Value.(*BACnetPulseConverter).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPORTPARAMETERS:
-			bv.Value = NewBACnetPortParameters()
-			length += bv.Value.(*BACnetPortParameters).Decode(buffer, offset+length, apduLen-length)
-		case encoding.TimeDelay,
-			BACnetPropertyIdentifierLIGHTCONTROLDELAY,
-			BACnetPropertyIdentifierINITIALTIMEDELAY:
-			bv.Value = NewBACnetTimeValue()
-			length += bv.Value.(*BACnetTimeValue).Decode(buffer, offset+length, apduLen-length)
-		case encoding.LightingCommand,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierRADIOFAILUREEVENTS,
-			BACnetPropertyIdentifierRADIOFAILUREEVENTS2,
-			BACnetPropertyIdentifierMACADDRESSCHANGEEVENTS:
-			bv.Value = NewBACnetCOVSubscription()
-			length += bv.Value.(*BACnetCOVSubscription).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierSHEDLEVELDESCENDANTS:
-			bv.Value = NewBACnetShedLevelDescendants()
-			length += bv.Value.(*BACnetShedLevelDescendants).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPERSISTENTDATA:
-			bv.Value = NewBACnetScheduleObjectPeriod()
-			length += bv.Value.(*BACnetScheduleObjectPeriod).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierRADIOSTATUS,
-			BACnetPropertyIdentifierRADIOSTATUS2:
-			bv.Value = NewBACnetRadioStatus()
-			length += bv.Value.(*BACnetRadioStatus).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierUSERINFORMATION,
-			BACnetPropertyIdentifierMACADDRESS:
-			bv.Value = NewBACnetMACAddress()
-			length += bv.Value.(*BACnetMACAddress).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierCOVMULTIPLESUBSCRIPTIONSFILTER,
-			BACnetPropertyIdentifierMONITORMULTIPLEBINARYINPUTS,
-			BACnetPropertyIdentifierMONITORMULTIPLEBINARYOUTPUTS,
-			BACnetPropertyIdentifierMULTIPLEMONITORING,
-			BACnetPropertyIdentifierSTOPWHENFULL,
-			BACnetPropertyIdentifierLIMITENABLE,
-			BACnetPropertyIdentifierDATAGROUPS,
-			BACnetPropertyIdentifierDEVICEADDRESSBINDING:
-			bv.Value = NewBACnetMultistateValue()
-			length += bv.Value.(*BACnetMultistateValue).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierLIGHTINGDEVICESTATUSALOGGING,
-			BACnetPropertyIdentifierLIGHTINGDEVICESTATUSLOGGING,
-			BACnetPropertyIdentifierDEVICEADDRESSBINDING,
-			BACnetPropertyIdentifierLIGHTINGDEVICEOPERATIONALMODE,
-			BACnetPropertyIdentifierLIGHTINGDEVICEOPERATIONALSTATUS,
-			BACnetPropertyIdentifierLIGHTINGGROUP,
-			BACnetPropertyIdentifierLIGHTINGGRP,
-			BACnetPropertyIdentifierLIGHTINGLOGGING:
-			bv.Value = NewBACnetLightingGroup()
-			length += bv.Value.(*BACnetLightingGroup).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierEVENTTIMESTAMPS:
-			bv.Value = NewBACnetTimeStampedValue()
-			length += bv.Value.(*BACnetTimeStampedValue).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGGROUP:
-			bv.Value = NewBACnetLightingGroup()
-			length += bv.Value.(*BACnetLightingGroup).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierNEGATIVEACCESSRULES,
-			BACnetPropertyIdentifierPOSITIVEACCESSRULES:
-			bv.Value = NewBACnetAccessRule()
-			length += bv.Value.(*BACnetAccessRule).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierNETWORKADDRESS,
-			BACnetPropertyIdentifierMASTERKEY,
-			encoding.AccessUser,
-			encoding.AccessZone,
-			BACnetPropertyIdentifierAREADELIVERING,
-			BACnetPropertyIdentifierAREARELAY,
-			BACnetPropertyIdentifierCONTROLLING,
-			BACnetPropertyIdentifierDELIVERING,
-			BACnetPropertyIdentifierENROLLING,
-			BACnetPropertyIdentifierLOWLIMIT,
-			BACnetPropertyIdentifierMAXIMUMOUTPUT,
-			BACnetPropertyIdentifierMAXIMUMVALUE,
-			BACnetPropertyIdentifierMINIMUMOUTPUT,
-			BACnetPropertyIdentifierMINIMUMVALUE,
-			BACnetPropertyIdentifierEVENTTIME,
-			BACnetPropertyIdentifierTIMEDELAY,
-			BACnetPropertyIdentifierDURATION,
-			BACnetPropertyIdentifierEXCEPTIONALLIMITS,
-			BACnetPropertyIdentifierINACTIVESTATE,
-			BACnetPropertyIdentifierINSTANTANEOUS,
-			BACnetPropertyIdentifierINVALIDATED,
-			BACnetPropertyIdentifierLIMITENABLE,
-			BACnetPropertyIdentifierRELIABILITY,
-			BACnetPropertyIdentifierSCALE,
-			BACnetPropertyIdentifierSTEPINCREMENT,
-			BACnetPropertyIdentifierTIMER,
-			BACnetPropertyIdentifierLIMIT,
-			BACnetPropertyIdentifierMAXIMUM,
-			BACnetPropertyIdentifierMINIMUM,
-			BACnetPropertyIdentifierPULSESCALING,
-			BACnetPropertyIdentifierSHUTDOWN,
-			BACnetPropertyIdentifierBUFFERPROPERTY,
-			BACnetPropertyIdentifierSTREAMINGTHRESHOLDS:
-			bv.Value = NewBACnetOctetString()
-			length += bv.Value.(*BACnetOctetString).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierCOVMULTIPLESUBSCRIPTIONSFILTER,
-			encoding.MultiStateValue:
-			bv.Value = NewBACnetMultistateValue()
-			length += bv.Value.(*BACnetMultistateValue).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierAUTHENTICATIONFACTORSUPPLIED,
-			BACnetPropertyIdentifierAUTHENTICATIONFACTORFORMAT,
-			BACnetPropertyIdentifierAUTHENTICATIONPOLICYNAME,
-			BACnetPropertyIdentifierAUTHENTICATIONPOLICYNAMES,
-			BACnetPropertyIdentifierPOLICYNAMES:
-			bv.Value = NewBACnetAuthorization()
-			length += bv.Value.(*BACnetAuthorization).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierDEVICEIDENTIFICATION:
-			bv.Value = NewBACnetCharacterString()
-			length += bv.Value.(*BACnetCharacterString).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierEVENTTIMESTAMPS:
-			bv.Value = NewBACnetTimeStampedValue()
-			length += bv.Value.(*BACnetTimeStampedValue).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierDEVICEIDENTIFICATION:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierSHEDLEVELS:
-			bv.Value = NewBACnetShedLevel()
-			length += bv.Value.(*BACnetShedLevel).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetPortFilter()
-			length += bv.Value.(*BACnetPortFilter).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPOLICY:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSRULES,
-			BACnetPropertyIdentifierINVALIDACTIONS,
-			BACnetPropertyIdentifierLOGGINGOBJECT,
-			BACnetPropertyIdentifierSAVERESTORESTATE:
-			bv.Value = NewBACnetDeviceObjectReference()
-			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACTIVESEQUENCE,
-			BACnetPropertyIdentifierCONTROLSEQUENCEOFOPERATION:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPORTFILTER,
-			BACnetPropertyIdentifierAUTHENTICATIONPOLICIES,
-			BACnetPropertyIdentifierAUTHENTICATIONPOLICYLIST:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPOLICYPASSWORD,
-			BACnetPropertyIdentifierPOLICYTYPE,
-			BACnetPropertyIdentifierTIMEDELAY,
-			BACnetPropertyIdentifierVERIFYPASSWORD,
-			BACnetPropertyIdentifierPORTPARAMETERS,
-			BACnetPropertyIdentifierDEVICEADDRESSBINDING:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierRELINQUISHDEFAULT,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSRULES,
-			BACnetPropertyIdentifierINVALIDACTIONS,
-			BACnetPropertyIdentifierLOGGINGOBJECT,
-			BACnetPropertyIdentifierSAVERESTORESTATE:
-			bv.Value = NewBACnetDeviceObjectReference()
-			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSSEQUENCE,
-			BACnetPropertyIdentifierACTIVESEQUENCE,
-			BACnetPropertyIdentifierCONTROLSEQUENCEOFOPERATION,
-			BACnetPropertyIdentifierFEEDINGPIPEINDEX,
-			BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE,
-			BACnetPropertyIdentifierSTATUSFLAGS:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICY,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPOLICYNAMES,
-			BACnetPropertyIdentifierACCESSRULES,
-			BACnetPropertyIdentifierLIMITDISABLE,
-			BACnetPropertyIdentifierMANUALSLIDERSETTINGS:
-			bv.Value = NewBACnetDeviceObjectReference()
-			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSRULES,
-			BACnetPropertyIdentifierINVALIDACTIONS,
-			BACnetPropertyIdentifierLOGGINGOBJECT,
-			BACnetPropertyIdentifierSAVERESTORESTATE:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPOLICYPASSWORD,
-			BACnetPropertyIdentifierPOLICYTYPE,
-			BACnetPropertyIdentifierTIMEDELAY,
-			BACnetPropertyIdentifierVERIFYPASSWORD:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierCONTROLSEQUENCEOFOPERATION,
-			BACnetPropertyIdentifierEXCEPTIONSCHEDULE,
-			BACnetPropertyIdentifierEVENTTIMESTAMPS:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierALARMVALUES:
-			bv.Value = NewBACnetDeviceObjectReference()
-			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierALARMVALUES,
-			BACnetPropertyIdentifierEVENTTYPE,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierSAFETYPOINTS:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCONTROLMODE:
-			bv.Value = NewBACnetLightingControlMode()
-			length += bv.Value.(*BACnetLightingControlMode).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierBACNETIPADDRESS,
-			BACnetPropertyIdentifierDEFAULTGATEWAY,
-			BACnetPropertyIdentifierIPADDRESS,
-			BACnetPropertyIdentifierSUBNETMASK:
-			bv.Value = NewBACnetIPAddress()
-			length += bv.Value.(*BACnetIPAddress).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetPortFilter()
-			length += bv.Value.(*BACnetPortFilter).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSRULES:
-			bv.Value = NewBACnetDeviceObjectReference()
-			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierRELIABILITY,
-			BACnetPropertyIdentifierUNITS:
-			bv.Value = NewBACnetReliability()
-			length += bv.Value.(*BACnetReliability).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPARAMETERSETUSAGE:
-			bv.Value = NewBACnetParameterSetUsage()
-			length += bv.Value.(*BACnetParameterSetUsage).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierCONTROLSEQUENCEOFOPERATION,
-			BACnetPropertyIdentifierEXCEPTIONSCHEDULE,
-			BACnetPropertyIdentifierEXCEPTIONSCHEDULEDEFAULT,
-			BACnetPropertyIdentifierLIGHTINGCOMMAND:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGINGDEFAULT,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierEVENTCODE,
-			BACnetPropertyIdentifierLONMARKRESOURCE,
-			BACnetPropertyIdentifierPOLICIES:
-			bv.Value = NewBACnetUnsignedInteger()
-			length += bv.Value.(*BACnetUnsignedInteger).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCOMMAND:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierLIGHTINGCONTROLOVERLOADALOGGING,
-			BACnetPropertyIdentifierRELOCATELIGHTINGOUTPUTDEVICE:
-			bv.Value = NewBACnetLightingCommand()
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierSAFETYPOINTS:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPOLICYPASSWORD,
-			BACnetPropertyIdentifierPOLICYTYPE,
-			BACnetPropertyIdentifierTIMEDELAY,
-			BACnetPropertyIdentifierVERIFYPASSWORD:
-			bv.Value = NewBACnetDeviceObjectPropertyReference()
-			length += bv.Value.(*BACnetDeviceObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICY,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierDEVICEIDENTIFICATION:
-			bv.Value = NewBACnetCharacterString()
-			length += bv.Value.(*BACnetCharacterString).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICY,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case encoding.AccessEvent,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
-		case BACnetPropertyIdentifierACCESSEVENTS,
-			BACnetPropertyIdentifierPOLICIES,
-			BACnetPropertyIdentifierPORTFILTER:
-			bv.Value = NewBACnetDeviceSecurityPolicy()
-			length += bv.Value.(*BACnetDeviceSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
 		default:
 			bv.Value = nil
 		}
@@ -885,7 +514,7 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType encodi
 
 func (bv *BACnetValue) Encode() []byte {
 	if bv.Tag == nil {
-		// Handle NULL case
+		return nil
 	} else {
 		switch *bv.Tag {
 		case Boolean:
@@ -903,28 +532,24 @@ func (bv *BACnetValue) Encode() []byte {
 		case CharacterString:
 			return encoding.EncodeApplicationCharacterString(bv.Value.(string))
 		case BitString:
-			return encoding.EncodeApplicationBitString(b)
-			// Handle BIT_STRING case
-			// Add your code here...
+			return encoding.EncodeApplicationBitString(bv.Value)
 		case Enumerated:
-			// Handle ENUMERATED case
-			// Add your code here...
+			return encoding.EncodeApplicationEnumerated(bv.Value.(uint32))
 		case Date:
-			// Handle DATE case
-			// Add your code here...
+			return encoding.EncodeApplicationDate(bv.Value.(time.Time))
 		case Time:
-			// Handle TIME case
-			// Add your code here...
+			return encoding.EncodeApplicationTime(bv.Value.(time.Time))
 		case BACnetObjectIdentifier:
-			// Handle BACNETOBJECTIDENTIFIER case
-			// Add your code here...
+			return bv.Value.(*ObjectIdentifier).EncodeApp()
 		default:
+			switch bv.Value.(type) {
+			case int:
+				return encoding.EncodeApplicationEnumerated(uint32(bv.Value.(int)))
+			}
 			log.Printf("Unsupported BACnetApplicationTag: %v", bv.Tag)
-			// Handle other BACnetApplicationTags as needed...
+			return nil
 		}
 	}
-
-	return nil
 }
 
 // BACnetRouterEntryStatus is an enumeration for the status of BACnetRouterEntry.
@@ -1118,10 +743,6 @@ func NewBACnetDaysOfWeek() *BACnetDaysOfWeek {
 		unusedBits: 1,
 		bitString:  *NewBACnetBitString(1, *internal.NewBitArray(8)),
 	}
-}
-
-func (d *BACnetDaysOfWeek) String() string {
-	return fmt.Sprintf("%08b", d.bitString.Value)
 }
 
 func (d *BACnetDaysOfWeek) Decode(buffer []byte, offset int, apduLen int) int {
@@ -2093,7 +1714,7 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 		for !encoding.IsClosingTagNumber(buffer, offset+leng, 4) && leng < apduLen {
 			bv := BACnetValue{}
 			propID := bac.PropertyIdentifier.(encoding.PropertyIdentifier)
-			leng1, _ := bv.Decode(buffer, offset+leng, apduLen-leng, bac.ObjectIdentifier.Type, propID)
+			leng1, _ := bv.Decode(buffer, offset+leng, apduLen-leng, &bac.ObjectIdentifier.Type, &propID)
 			if leng1 < 0 {
 				return -1
 			}
@@ -2152,4 +1773,988 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 	}
 
 	return leng
+}
+
+type BACnetScale struct {
+	Value interface{}
+}
+
+func (bs *BACnetScale) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		// float-scale
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bs.Value = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else if encoding.IsContextTag(buffer, offset+leng, 1) {
+		// integer-scale
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bs.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetLightingCommand struct {
+	Operation     BACnetLightingOperation
+	TargetLevel   float32
+	RampRate      float32
+	StepIncrement float32
+	FadeTime      uint32
+	Priority      uint32
+}
+
+type BACnetLightingOperation uint32
+
+const (
+	LightingOperationUnknown BACnetLightingOperation = iota
+	LightingOperationOff
+	LightingOperationOn
+	LightingOperationToggle
+	LightingOperationDecrement
+	LightingOperationIncrement
+)
+
+func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	// operation
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, uVal := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+		blc.Operation = BACnetLightingOperation(uVal)
+	} else {
+		return -1
+	}
+
+	if leng < apduLen {
+		// target-level
+		if encoding.IsContextTag(buffer, offset+leng, 1) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, blc.TargetLevel = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// ramp-rate
+		if encoding.IsContextTag(buffer, offset+leng, 2) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, blc.RampRate = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// step-increment
+		if encoding.IsContextTag(buffer, offset+leng, 3) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, blc.StepIncrement = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// fade-time
+		if encoding.IsContextTag(buffer, offset+leng, 4) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, blc.FadeTime = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	if leng < apduLen {
+		// priority
+		if encoding.IsContextTag(buffer, offset+leng, 5) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			leng1, blc.Priority = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+		}
+	}
+
+	return leng
+}
+
+type BACnetPrescale struct {
+	Multiplier   uint32
+	ModuloDivide uint32
+}
+
+func (bp *BACnetPrescale) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	// multiplier
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bp.Multiplier = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else {
+		return -1
+	}
+
+	// modulo_divide
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bp.ModuloDivide = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetShedLevelChoice int
+
+const (
+	BACnetShedLevelChoicePercent BACnetShedLevelChoice = iota
+	BACnetShedLevelChoiceLevel
+	BACnetShedLevelChoiceAmount
+)
+
+type BACnetShedLevel struct {
+	Choice BACnetShedLevelChoice
+	Value  interface{}
+}
+
+func (bsl *BACnetShedLevel) Decode(buffer []byte, offset int, apduLen int) int {
+	leng := 0
+
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		// percent
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bsl.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+		bsl.Choice = BACnetShedLevelChoicePercent
+	} else if encoding.IsContextTag(buffer, offset+leng, 1) {
+		// level
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bsl.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+		bsl.Choice = BACnetShedLevelChoiceLevel
+	} else if encoding.IsContextTag(buffer, offset+leng, 2) {
+		// amount
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, bsl.Value = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+		leng += leng1
+		bsl.Choice = BACnetShedLevelChoiceAmount
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetLogRecordChoice int
+
+const (
+	BACnetLogRecordChoiceLogStatus BACnetLogRecordChoice = iota
+	BACnetLogRecordChoiceBooleanValue
+	BACnetLogRecordChoiceRealValue
+	BACnetLogRecordChoiceEnumeratedValue
+	BACnetLogRecordChoiceUnsignedValue
+	BACnetLogRecordChoiceIntegerValue
+	BACnetLogRecordChoiceBitstringValue
+	BACnetLogRecordChoiceNullValue
+	BACnetLogRecordChoiceFailure
+	BACnetLogRecordChoiceTimeChange
+	BACnetLogRecordChoiceAnyValue
+)
+
+type BACnetLogRecord struct {
+	Timestamp   BACnetTimeStamp
+	LogDatum    interface{}
+	StatusFlags BACnetStatusFlags
+}
+
+func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *encoding.ObjectType, propID *encoding.PropertyIdentifier) int {
+	leng := 0
+
+	// timestamp
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		blr.Timestamp = BACnetTimeStamp{}
+		leng1, err := blr.Timestamp.Decode(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1
+		}
+		leng += leng1
+	} else {
+		return -1
+	}
+
+	if encoding.IsContextTag(buffer, offset+leng, 1) {
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+
+		switch BACnetLogRecordChoice(tagNumber) {
+		case BACnetLogRecordChoiceLogStatus:
+			blr.LogDatum = &BACnetLogStatus{}
+			leng += blr.LogDatum.(*BACnetLogStatus).Decode(buffer, offset+leng, int(lenValue))
+		case BACnetLogRecordChoiceBooleanValue:
+			blr.LogDatum = buffer[offset+leng] > 0
+			leng++
+		case BACnetLogRecordChoiceRealValue:
+			leng1, logValue := encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+			leng += leng1
+			blr.LogDatum = logValue
+		case BACnetLogRecordChoiceEnumeratedValue:
+			leng1, logValue := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+			leng += leng1
+			blr.LogDatum = logValue
+		case BACnetLogRecordChoiceUnsignedValue:
+			leng1, logValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+			blr.LogDatum = logValue
+		case BACnetLogRecordChoiceIntegerValue:
+			leng1, logValue := encoding.DecodeSigned(buffer, offset+leng, int(lenValue))
+			leng += leng1
+			blr.LogDatum = logValue
+		case BACnetLogRecordChoiceBitstringValue:
+			blr.LogDatum = &BACnetBitString{}
+			leng += blr.LogDatum.(*BACnetBitString).Decode(buffer, offset+leng, int(lenValue))
+		case BACnetLogRecordChoiceNullValue:
+			blr.LogDatum = nil
+			leng++
+		case BACnetLogRecordChoiceFailure:
+			blr.LogDatum = &BACnetError{}
+			leng += blr.LogDatum.(*BACnetError).Decode(buffer, offset+leng, apduLen-leng)
+			if encoding.IsClosingTagNumber(buffer, offset+leng, byte(BACnetLogRecordChoiceFailure)) {
+				leng++
+			} else {
+				return -1
+			}
+		case BACnetLogRecordChoiceTimeChange:
+			leng1, logValue := encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+			leng += leng1
+			blr.LogDatum = logValue
+		case BACnetLogRecordChoiceAnyValue:
+			blr.LogDatum = []BACnetValue{}
+			for !encoding.IsClosingTagNumber(buffer, offset+leng, byte(BACnetLogRecordChoiceAnyValue)) && leng < apduLen {
+				bValue := BACnetValue{}
+				leng1, _ := bValue.Decode(buffer, offset+leng, apduLen-leng, objType, propID)
+				if leng1 < 0 {
+					return -1
+				}
+				leng += leng1
+				blr.LogDatum = append(blr.LogDatum.([]BACnetValue), bValue)
+			}
+			if encoding.IsClosingTagNumber(buffer, offset+leng, byte(BACnetLogRecordChoiceAnyValue)) {
+				leng++
+			} else {
+				return -1
+			}
+		default:
+			return -1
+		}
+	} else {
+		return -1
+	}
+
+	if leng < apduLen {
+		// status-flags optional
+		if encoding.IsContextTag(buffer, offset+leng, 2) {
+			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng += leng1
+			blr.StatusFlags = BACnetStatusFlags{}
+			leng += blr.StatusFlags.Decode(buffer, offset+leng, int(lenValue))
+		}
+	}
+
+	return leng
+}
+
+type BACnetLogStatus struct {
+	UnusedBits uint8
+	BitString  *BACnetBitString
+}
+
+func NewBACnetLogStatus() BACnetLogStatus {
+	return BACnetLogStatus{
+		UnusedBits: 5,
+		BitString:  NewBACnetBitString(5, *internal.NewBitArrayFromByte(0x00)),
+	}
+}
+
+func (bls *BACnetLogStatus) Decode(buffer []byte, offset, apduLen int) int {
+	bls.BitString = NewBACnetBitString(5, *internal.NewBitArrayFromByte(0x00))
+	return bls.BitString.Decode(buffer, offset, apduLen)
+}
+
+func (bls *BACnetLogStatus) SetLogDisabled(a bool) {
+	bls.BitString.Value.Set(0, a)
+}
+
+func (bls *BACnetLogStatus) SetBufferPurged(a bool) {
+	bls.BitString.Value.Set(1, a)
+}
+
+func (bls *BACnetLogStatus) SetLogInterrupted(a bool) {
+	bls.BitString.Value.Set(2, a)
+}
+
+func (bls *BACnetLogStatus) LogDisabled() bool {
+	return bls.BitString.Value.Get(0)
+}
+
+func (bls *BACnetLogStatus) BufferPurged() bool {
+	return bls.BitString.Value.Get(1)
+}
+
+func (bls *BACnetLogStatus) LogInterrupted() bool {
+	return bls.BitString.Value.Get(2)
+}
+
+type BACnetError struct {
+	ErrorClass ErrorClassEnum
+	ErrorCode  ErrorCodeEnum
+}
+
+func (be *BACnetError) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+
+	// Decode error_class
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng += leng1
+	if tagNumber == byte(Enumerated) {
+		leng1, eVal := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		leng += leng1
+		be.ErrorClass = ErrorClassEnum(eVal.(uint32))
+	} else {
+		return -1
+	}
+
+	// Decode error_code
+	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng += leng1
+	if tagNumber == byte(Enumerated) {
+		leng1, eVal := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		leng += leng1
+		be.ErrorCode = ErrorCodeEnum(eVal.(uint32))
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetCalendarEntry struct {
+	Value interface{}
+}
+
+func (ce *BACnetCalendarEntry) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng += leng1
+	if tagNumber == 0 {
+		leng1, ce.Value = encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
+		leng += leng1
+	} else if tagNumber == 1 {
+		ce.Value = &BACnetDateRange{}
+		leng1, err := ce.Value.(*BACnetDateRange).Decode(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1
+		}
+		leng += leng1
+	} else if tagNumber == 2 {
+		ce.Value = &BACnetWeekNDay{}
+		leng += ce.Value.(*BACnetWeekNDay).Decode(buffer, offset+leng, int(lenValue))
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetEventLogRecord struct {
+	Timestamp DateTime
+	LogDatum  interface{}
+}
+
+func (elr *BACnetEventLogRecord) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+	if encoding.IsContextTag(buffer, offset+leng, 0) {
+		leng1, _, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		elr.Timestamp = DateTime{}
+		leng += elr.Timestamp.Decode(buffer, offset+leng)
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetWeekNDay struct {
+	Month       int
+	WeekOfMonth int
+	DayOfWeek   int
+}
+
+func (wnd *BACnetWeekNDay) Decode(buffer []byte, offset, apduLen int) int {
+	if apduLen >= 3 {
+		wnd.Month = int(buffer[offset])
+		wnd.WeekOfMonth = int(buffer[offset+1])
+		wnd.DayOfWeek = int(buffer[offset+2])
+	} else {
+		return -1
+	}
+	return 3
+}
+
+type ReadAccessResultReadResult struct {
+	PropertyIdentifier encoding.PropertyIdentifier
+	PropertyArrayIndex uint32
+	ReadResult         interface{} // Either BACnetValue or BACnetError
+}
+
+func (rarr *ReadAccessResultReadResult) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+	// 2 propertyidentifier
+	if encoding.IsContextTag(buffer, offset+leng, 2) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		propID := encoding.PropertyList
+		leng1, propertyIdentifier := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng += leng1
+		rarr.PropertyIdentifier = encoding.PropertyIdentifier(propertyIdentifier.(uint32))
+	} else {
+		return -1
+	}
+
+	// 3 property_array_index
+	if encoding.IsContextTag(buffer, offset+leng, 3) {
+		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+		leng1, propertyArrayIndex := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng += leng1
+		rarr.PropertyArrayIndex = propertyArrayIndex
+	}
+
+	if leng < apduLen {
+		if encoding.IsOpeningTagNumber(buffer, offset+leng, 4) {
+			rarr.ReadResult = &BACnetValue{}
+			leng1, err := rarr.ReadResult.(*BACnetValue).Decode(buffer, offset+leng, apduLen-leng, nil, nil)
+			if err != nil {
+				return -1
+			}
+			leng += leng1
+			if encoding.IsClosingTagNumber(buffer, offset+leng, 4) {
+				leng += 1
+			} else {
+				return -1
+			}
+		} else if encoding.IsOpeningTagNumber(buffer, offset+leng, 5) {
+			rarr.ReadResult = &BACnetError{}
+			leng += rarr.ReadResult.(*BACnetError).Decode(buffer, offset+leng, apduLen-leng)
+			if encoding.IsClosingTagNumber(buffer, offset+leng, 5) {
+				leng += 1
+			} else {
+				return -1
+			}
+		}
+	}
+	return leng
+}
+
+type ReadAccessResult struct {
+	ObjectIdentifier ObjectIdentifier
+	ListOfResults    []ReadAccessResultReadResult
+}
+
+func (rar *ReadAccessResult) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+	// tag 0 objectidentifier
+	rar.ObjectIdentifier = ObjectIdentifier{}
+	if encoding.IsClosingTagNumber(buffer, offset+leng, 0) {
+		leng += rar.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	} else {
+		return -1
+	}
+
+	if encoding.IsOpeningTagNumber(buffer, offset+leng, 1) {
+		leng += 1
+		rar.ListOfResults = make([]ReadAccessResultReadResult, 0)
+
+		for (apduLen-leng) > 1 && !encoding.IsClosingTagNumber(buffer, offset+leng, 1) {
+			bValue := ReadAccessResultReadResult{}
+			leng += bValue.Decode(buffer, offset+leng, apduLen-leng)
+
+			rar.ListOfResults = append(rar.ListOfResults, bValue)
+		}
+
+		if encoding.IsClosingTagNumber(buffer, offset+leng, 1) {
+			leng += 1
+		} else {
+			return -1
+		}
+	} else {
+		return -1
+	}
+
+	return leng
+}
+
+type BACnetAccessRule struct {
+	TimeRangeSpecifier BACnetTimeRangeSpecifierChoice
+	TimeRange          BACnetDeviceObjectPropertyReference
+	LocationSpecifier  BACnetLocationSpecifierChoice
+	Location           BACnetDeviceObjectReference
+	Enable             bool
+}
+
+type BACnetTimeRangeSpecifierChoice int
+
+const (
+	Specified BACnetTimeRangeSpecifierChoice = iota
+	Always
+)
+
+type BACnetLocationSpecifierChoice int
+
+const (
+	SpecifiedLocation BACnetLocationSpecifierChoice = iota
+	All
+)
+
+func (bar *BACnetAccessRule) Decode(buffer []byte, offset, apduLen int) int {
+	return -1
+}
+
+type BACnetNameValue struct {
+	Name  string
+	Value BACnetValue
+}
+
+func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+
+	// Name
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber != 0 {
+		return -1
+	}
+	leng += leng1
+	leng1, bnv.Name = encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
+	leng += leng1
+
+	// Decode value
+	decodeLen := 0
+	if leng < apduLen {
+		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng += leng1
+
+		switch ApplicationTags(tagNumber) {
+		case Null:
+			bnv.Value = BACnetValue{Value: nil}
+			decodeLen = 0
+			// Fixme: fix null type nothing else to do, some Error occurs!!!!
+		case Boolean:
+			if lenValue > 0 {
+				bnv.Value = BACnetValue{Value: true}
+			} else {
+				bnv.Value = BACnetValue{Value: false}
+			}
+		case UnsignedInt:
+			decodeLen, bnv.Value.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		case SignedInt:
+			decodeLen, bnv.Value.Value = encoding.DecodeSigned(buffer, offset+leng, int(lenValue))
+		case Real:
+			decodeLen, bnv.Value.Value = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
+		case Double:
+			decodeLen, bnv.Value.Value = encoding.DecodeDoubleSafe(buffer, offset+leng, int(lenValue))
+		case OctetString:
+			decodeLen, bnv.Value.Value = encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
+		case CharacterString:
+			decodeLen, bnv.Value.Value = encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
+		case BitString:
+			bitValue := BACnetBitString{}
+			decodeLen = bitValue.Decode(buffer, offset+leng, int(lenValue))
+			bnv.Value.Value = bitValue
+		case Enumerated:
+			decodeLen, bnv.Value.Value = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		case Date:
+			decodeLen, dateValue := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
+
+			if leng < apduLen {
+				leng1, tagNumber, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng+decodeLen)
+				if tagNumber == byte(Time) {
+					leng += leng1
+					leng--
+					bnv.Value.Value = &DateTime{}
+					decodeLen = bnv.Value.Value.(*DateTime).Decode(buffer, offset+leng)
+				}
+			} else {
+				bnv.Value.Value = dateValue
+			}
+		case Time:
+			decodeLen, bnv.Value.Value = encoding.DecodeBACnetTimeSafe(buffer, offset+leng, int(lenValue))
+		}
+
+		if decodeLen < 0 {
+			return -1
+		}
+		leng += decodeLen
+	}
+
+	return leng
+}
+
+type BACnetNameValueCollection struct {
+	Members []BACnetNameValue
+}
+
+func (bnc *BACnetNameValueCollection) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+
+	// Check if it's an opening tag number
+	if !encoding.IsOpeningTagNumber(buffer, offset+leng, 0) {
+		return -1
+	}
+
+	leng += 1
+	bnc.Members = make([]BACnetNameValue, 0)
+
+	for !encoding.IsClosingTagNumber(buffer, offset+leng, 0) {
+		bValue := BACnetNameValue{}
+		leng1 := bValue.Decode(buffer, offset+leng, apduLen-leng)
+		if leng1 < 0 {
+			return -1
+		}
+		leng += leng1
+		bnc.Members = append(bnc.Members, bValue)
+	}
+
+	leng += 1
+	return leng
+}
+
+type BACnetSecurityPolicy int
+
+type BACnetNetworkSecurityPolicy struct {
+	PortID        int
+	SecurityLevel BACnetSecurityPolicy
+}
+
+func (bns *BACnetNetworkSecurityPolicy) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+
+	// port_id
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber != 0 {
+		return -1
+	}
+	leng += leng1
+	leng1, portID := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng += leng1
+	bns.PortID = int(portID)
+
+	leng = 0
+	// security_level
+	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber != 1 {
+		return -1
+	}
+	leng += leng1
+	leng1, uVal := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng += leng1
+	bns.SecurityLevel = BACnetSecurityPolicy(uVal)
+
+	return leng
+}
+
+type BACnetPortPermission struct {
+	PortID  int
+	Enabled bool
+}
+
+func (bpp *BACnetPortPermission) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+
+	// port_id
+	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber != 0 {
+		return -1
+	}
+	leng += leng1
+	leng1, portID := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng += leng1
+	bpp.PortID = int(portID)
+
+	leng = 0
+	// enabled
+	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if tagNumber != 1 {
+		return -1
+	}
+	leng += leng1
+	if lenValue > 0 {
+		bpp.Enabled = true
+	} else {
+		bpp.Enabled = false
+	}
+
+	return leng
+}
+
+type BACnetPriorityValue struct {
+	Value interface{}
+}
+
+func (bpv *BACnetPriorityValue) Decode(buffer []byte, offset, apduLen int) int {
+	// TODO Implement decoding logic for BACnetPriorityValue
+	return -1
+}
+
+type BACnetPriorityArray struct {
+	Value [16]BACnetPriorityValue
+}
+
+func (bpa *BACnetPriorityArray) Decode(buffer []byte, offset, apduLen int) int {
+	leng := 0
+	i := 0
+
+	for leng < apduLen && i < 16 {
+		bpa.Value[i] = BACnetPriorityValue{}
+		leng += bpa.Value[i].Decode(buffer, offset+leng, apduLen-leng)
+		i++
+	}
+
+	return leng
+}
+
+type BACnetProcessIdSelection struct {
+	Value interface{} // You can specify the type you expect here
+}
+
+func (bps *BACnetProcessIdSelection) Decode(buffer []byte, offset, apduLen int) int {
+	// TODO Implement decoding logic for BACnetProcessIdSelection
+	return -1
+}
+
+type BACnetPropertyAccessResult struct {
+	ObjectIdentifier   ObjectIdentifier
+	PropertyIdentifier encoding.PropertyIdentifier
+	PropertyArrayIndex int
+	DeviceIdentifier   ObjectIdentifier
+	AccessResult       interface{}
+}
+
+func (bpar *BACnetPropertyAccessResult) Decode(buffer []byte, offset, apduLen int) int {
+	// TODO Implement decoding logic for BACnetPropertyAccessResult here
+	return -1
+}
+
+type BACnetSetpointReference struct {
+	Value interface{}
+}
+
+func (bsr *BACnetSetpointReference) Decode(buffer []byte, offset, apduLen int) int {
+	// TODO Implement decoding logic for BACnetSetpointReference here
+	return 0
+}
+
+type BACnetSpecialEvent struct {
+	Period           interface{}
+	ListOfTimeValues []interface{}
+	EventPriority    int
+}
+
+func (bse *BACnetSpecialEvent) Decode(buffer []byte, offset, apduLen int) int {
+	// TODO Implement decoding logic for BACnetSpecialEvent here
+	return 0
+}
+
+type BACnetTimerStateChangeValue struct {
+	Value interface{}
+}
+
+func (scv *BACnetTimerStateChangeValue) Decode([]byte, int, int) int {
+	// TODO implement decoder
+	return -1
+}
+
+type BACnetValueSource struct {
+	Value interface{}
+}
+
+func (scv *BACnetValueSource) Decode([]byte, int, int) int {
+	// TODO implement decoder
+	return -1
+}
+
+type BACnetVMACEntry struct {
+	VirtualMacAddress interface{}
+	NativeMacAddress  interface{}
+}
+
+func (scv *BACnetVMACEntry) Decode([]byte, int, int) int {
+	// TODO implement decoder
+	return -1
+}
+
+type BACnetAssignedAccessRights struct {
+	AssignedAccessRights BACnetDeviceObjectReference
+	Enable               bool
+}
+
+func (scv *BACnetAssignedAccessRights) Decode([]byte, int, int) int {
+	// TODO implement decoder
+	return -1
+}
+
+type BACnetAssignedLandingCalls struct {
+	LandingCalls []landingCall
+}
+
+type landingCall struct {
+	FloorNumber int
+	Direction   BACnetLiftCarDirection
+}
+
+func (balc *BACnetAssignedLandingCalls) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetAssignedLandingCalls
+	return 0
+}
+
+type BACnetLiftCarDirection int
+
+type BACnetAuthenticationFactor struct {
+	FormatType  BACnetAuthenticationFactorType
+	FormatClass int
+	Value       []byte
+}
+
+func (baf *BACnetAuthenticationFactor) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetAuthenticationFactor
+	return 0
+}
+
+type BACnetAuthenticationFactorType int
+
+type BACnetAuthenticationFactorFormat struct {
+	FormatType   BACnetAuthenticationFactorType
+	VendorID     int
+	VendorFormat int
+}
+
+func (baff *BACnetAuthenticationFactorFormat) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetAuthenticationFactorFormat
+	return 0
+}
+
+type BACnetAuthenticationPolicy struct {
+	Policies      []policy
+	OrderEnforced bool
+	Timeout       int
+}
+
+type policy struct {
+	CredentialDataInput BACnetDeviceObjectReference
+	Index               int
+}
+
+func (bap *BACnetAuthenticationPolicy) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetAuthenticationPolicy
+	return 0
+}
+
+type BACnetBDTEntry struct {
+	// Define BACnetBDTEntry structure here
+}
+
+type BACnetChannelValue struct {
+	Value interface{}
+}
+
+func (bcv *BACnetChannelValue) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetChannelValue
+	return 0
+}
+
+type BACnetCOVSubscription struct {
+	Recipient                   BACnetRecipientProcess
+	MonitoredPropertyReference  BACnetObjectPropertyReference
+	IssueConfirmedNotifications bool
+	TimeRemaining               int
+	COVIncrement                float64
+}
+
+func (bcs *BACnetCOVSubscription) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetCOVSubscription
+	return 0
+}
+
+type BACnetAccessAuthenticationFactorDisable int
+
+type BACnetCredentialAuthenticationFactor struct {
+	Disable              BACnetAccessAuthenticationFactorDisable
+	AuthenticationFactor BACnetAuthenticationFactor
+}
+
+func (bcaf *BACnetCredentialAuthenticationFactor) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetCredentialAuthenticationFactor
+	return 0
+}
+
+type BACnetDailySchedule struct {
+	DaySchedule []interface{}
+}
+
+func (bds *BACnetDailySchedule) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetDailySchedule
+	return 0
+}
+
+type BACnetRecipientProcess struct {
+	// Define BACnetRecipientProcess structure here
+}
+
+type BACnetEventNotificationSubscription struct {
+	Recipient                   BACnetRecipient
+	ProcessIdentifier           int
+	IssueConfirmedNotifications bool
+	TimeRemaining               int
+}
+
+func (bens *BACnetEventNotificationSubscription) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetEventNotificationSubscription
+	return 0
+}
+
+type BACnetEventParameter struct {
+	Value interface{}
+}
+
+func (bep *BACnetEventParameter) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetEventParameter
+	return 0
+}
+
+type BACnetFaultParameter struct {
+	Value interface{}
+}
+
+func (bfp *BACnetFaultParameter) Decode(buffer []byte, offset, apduLen int) int {
+	// Implement decoding logic for BACnetFaultParameter
+	return 0
 }

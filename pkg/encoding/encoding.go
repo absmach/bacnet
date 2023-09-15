@@ -139,3 +139,8 @@ func encodeBACnetDouble(value float64) []byte {
 	binary.BigEndian.PutUint64(buf, math.Float64bits(value))
 	return buf
 }
+
+func EncodeApplicationBitString(val interface{}) []byte {
+	// TODO
+	return nil
+}
