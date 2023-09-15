@@ -48,11 +48,6 @@ func main() {
 	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+4))
 	message := append(blvcBytes, mes...)
 
-	fmt.Println(message)
-
-	message = []byte{129, 10, 0, 17, 1, 4, 0, 5, 1, 12, 12, 0, 0, 0, 10, 25, 85}
-	fmt.Println(message)
-
 	// Define the BACnet broadcast address (255.255.255.255:47808)
 	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.6:47809")
 	if err != nil {
@@ -99,7 +94,23 @@ func main() {
 
 		// Process the response (you'll need to parse BACnet responses here)
 		response := buffer[:n]
-		log.Printf("Received response: %X\n", response)
-
+		blvc := bacnet.BVLC{BVLLTypeBACnetIP: 0x81}
+		headerLength, function, msgLength, err := blvc.Decode(response, 0)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("headerLength %v BVLCfunction %v msgLen %v\n", headerLength, function, msgLength)
+		fmt.Println("blvc", blvc)
+		npdu := bacnet.NPDU{Version: 1}
+		npduLen := npdu.Decode(response, headerLength)
+		fmt.Println("npdu", npdu)
+		apdu := bacnet.APDU{}
+		apduLen := apdu.Decode(response, headerLength+npduLen)
+		fmt.Println("apdu", apdu)
+		readPropACK := bacnet.ReadPropertyACK{}
+		if _, err = readPropACK.Decode(response, headerLength+npduLen+apduLen-2, len(response)); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("readprop", readPropACK)
 	}
 }
