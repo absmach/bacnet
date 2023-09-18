@@ -136,7 +136,7 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 }
 
 type BACnetValue struct {
-	Tag   *ApplicationTags
+	Tag   *encoding.BACnetApplicationTag
 	Value interface{}
 }
 
@@ -147,23 +147,23 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 	if !encoding.IsContextSpecific(buffer[offset]) {
 		tagLen, tagNumber, lenValueType := encoding.DecodeTagNumberAndValue(buffer, offset)
 		if tagLen > 0 {
-			ttag := ApplicationTags(tagNumber)
+			ttag := encoding.BACnetApplicationTag(tagNumber)
 			bv.Tag = &ttag
 			length += tagLen
 
 			decodeLen := 0
 
 			switch *bv.Tag {
-			case Null:
+			case encoding.Null:
 				bv.Value = nil
 				decodeLen = 0
-			case Boolean:
+			case encoding.Boolean:
 				if lenValueType > 0 {
 					bv.Value = true
 				} else {
 					bv.Value = false
 				}
-			case UnsignedInt:
+			case encoding.UnsignedInt:
 				if *propID == encoding.RoutingTable {
 					bv.Tag = nil
 					bv.Value = &RouterEntry{}
@@ -187,27 +187,27 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 					decodeLen, uintVal = encoding.DecodeUnsigned(buffer, offset+length, int(lenValueType))
 					bv.Value = uintVal
 				}
-			case SignedInt:
+			case encoding.SignedInt:
 				var intValue int
 				decodeLen, intValue = encoding.DecodeSigned(buffer, offset+length, int(lenValueType))
 				bv.Value = intValue
-			case Real:
+			case encoding.Real:
 				var floatValue float32
 				decodeLen, floatValue = encoding.DecodeRealSafe(buffer, offset+length, int(lenValueType))
 				bv.Value = floatValue
-			case Double:
+			case encoding.Double:
 				var doubleValue float64
 				decodeLen, doubleValue = encoding.DecodeDoubleSafe(buffer, offset+length, int(lenValueType))
 				bv.Value = doubleValue
-			case OctetString:
+			case encoding.OctetString:
 				var octetValue []byte
 				decodeLen, octetValue = encoding.DecodeOctetString(buffer, offset+length, int(lenValueType))
 				bv.Value = octetValue
-			case CharacterString:
+			case encoding.CharacterString:
 				var stringValue string
 				decodeLen, stringValue = encoding.DecodeCharacterString(buffer, offset+length, apduLen, int(lenValueType))
 				bv.Value = stringValue
-			case BitString:
+			case encoding.BitString:
 				switch *propID {
 				case encoding.RecipientList:
 					bv.Tag = nil
@@ -244,9 +244,9 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 					decodeLen = bitValue.Decode(buffer, offset, int(lenValueType))
 					bv.Value = bitValue
 				}
-			case Enumerated:
+			case encoding.Enumerated:
 				decodeLen, bv.Value = encoding.DecodeEnumerated(buffer, offset+length, lenValueType, objType, propID)
-			case Date:
+			case encoding.Date:
 				switch *propID {
 				case encoding.EffectivePeriod:
 					bv.Tag = nil
@@ -283,9 +283,9 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 				if (*objType == encoding.DateTimeValue || *objType == encoding.TimePatternValue) && (*propID == encoding.PresentValue || *propID == encoding.RelinquishDefault) {
 					decodeLen, bv.Value = encoding.DecodeDateSafe(buffer, offset+length, int(lenValueType))
 				}
-			case Time:
+			case encoding.Time:
 				decodeLen, bv.Value = encoding.DecodeBACnetTimeSafe(buffer, offset+length, int(lenValueType))
-			case BACnetObjectIdentifier:
+			case encoding.BACnetObjectIdentifier:
 				if *propID == encoding.LastKeyServer ||
 					*propID == encoding.ManualSlaveAddressBinding ||
 					*propID == encoding.SlaveAddressBinding ||
@@ -517,29 +517,29 @@ func (bv *BACnetValue) Encode() []byte {
 		return nil
 	} else {
 		switch *bv.Tag {
-		case Boolean:
+		case encoding.Boolean:
 			return encoding.EncodeApplicationBoolean(bv.Value.(bool))
-		case UnsignedInt:
+		case encoding.UnsignedInt:
 			return encoding.EncodeApplicationUnsigned(bv.Value.(uint32))
-		case SignedInt:
+		case encoding.SignedInt:
 			return encoding.EncodeApplicationSigned(bv.Value.(int32))
-		case Real:
+		case encoding.Real:
 			return encoding.EncodeApplicationReal(bv.Value.(float32))
-		case Double:
+		case encoding.Double:
 			return encoding.EncodeApplicationDouble(bv.Value.(float64))
-		case OctetString:
+		case encoding.OctetString:
 			return encoding.EncodeApplicationOctetString(bv.Value.([]byte), 0, len(bv.Value.([]byte)))
-		case CharacterString:
+		case encoding.CharacterString:
 			return encoding.EncodeApplicationCharacterString(bv.Value.(string))
-		case BitString:
+		case encoding.BitString:
 			return encoding.EncodeApplicationBitString(bv.Value)
-		case Enumerated:
+		case encoding.Enumerated:
 			return encoding.EncodeApplicationEnumerated(bv.Value.(uint32))
-		case Date:
+		case encoding.Date:
 			return encoding.EncodeApplicationDate(bv.Value.(time.Time))
-		case Time:
+		case encoding.Time:
 			return encoding.EncodeApplicationTime(bv.Value.(time.Time))
-		case BACnetObjectIdentifier:
+		case encoding.BACnetObjectIdentifier:
 			return bv.Value.(*ObjectIdentifier).EncodeApp()
 		default:
 			switch bv.Value.(type) {
@@ -1095,7 +1095,7 @@ func (dr *BACnetDateRange) Decode(buffer []byte, offset, apduLen int) (int, erro
 	var leng int
 
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
-	if tagNumber == byte(Date) {
+	if tagNumber == byte(encoding.Date) {
 		leng += leng1
 		leng1, startDate := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
 		dr.StartDate = startDate
@@ -1105,7 +1105,7 @@ func (dr *BACnetDateRange) Decode(buffer []byte, offset, apduLen int) (int, erro
 	}
 
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
-	if tagNumber == byte(Date) {
+	if tagNumber == byte(encoding.Date) {
 		leng += leng1
 		leng1, endDate := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
 
@@ -1128,7 +1128,7 @@ func (binding *BACnetAddressBinding) Decode(buffer []byte, offset int, apduLen i
 	length1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+length)
 
 	// device_identifier
-	if tagNumber == byte(BACnetObjectIdentifier) {
+	if tagNumber == byte(encoding.BACnetObjectIdentifier) {
 		length += length1
 		binding.DeviceIdentifier = ObjectIdentifier{}
 		length += binding.DeviceIdentifier.Decode(buffer, offset+length, int(lenValue))
@@ -1138,7 +1138,7 @@ func (binding *BACnetAddressBinding) Decode(buffer []byte, offset int, apduLen i
 
 	length1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+length)
 
-	if tagNumber == byte(UnsignedInt) {
+	if tagNumber == byte(encoding.UnsignedInt) {
 		binding.DeviceAddress = BACnetAddress{}
 		length += binding.DeviceAddress.Decode(buffer, offset+length, int(lenValue))
 	} else {
@@ -1193,15 +1193,15 @@ func (b *BACnetHostAddress) Decode(buffer []byte, offset, apduLen int) (int, err
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 
 	switch tagNumber {
-	case byte(Null):
+	case byte(encoding.Null):
 		leng += leng1
 		b.Value = nil
-	case byte(OctetString):
+	case byte(encoding.OctetString):
 		leng += leng1
 		leng1, octetString := encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
 		b.Value = octetString
 		leng += leng1
-	case byte(CharacterString):
+	case byte(encoding.CharacterString):
 		leng += leng1
 		leng1, characterString := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
 		b.Value = characterString
@@ -2135,7 +2135,7 @@ func (be *BACnetError) Decode(buffer []byte, offset, apduLen int) int {
 	// Decode error_class
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber == byte(Enumerated) {
+	if tagNumber == byte(encoding.Enumerated) {
 		leng1, eVal := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
 		leng += leng1
 		be.ErrorClass = ErrorClassEnum(eVal.(uint32))
@@ -2146,7 +2146,7 @@ func (be *BACnetError) Decode(buffer []byte, offset, apduLen int) int {
 	// Decode error_code
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber == byte(Enumerated) {
+	if tagNumber == byte(encoding.Enumerated) {
 		leng1, eVal := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
 		leng += leng1
 		be.ErrorCode = ErrorCodeEnum(eVal.(uint32))
@@ -2363,41 +2363,41 @@ func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
 		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 		leng += leng1
 
-		switch ApplicationTags(tagNumber) {
-		case Null:
+		switch encoding.BACnetApplicationTag(tagNumber) {
+		case encoding.Null:
 			bnv.Value = BACnetValue{Value: nil}
 			decodeLen = 0
 			// Fixme: fix null type nothing else to do, some Error occurs!!!!
-		case Boolean:
+		case encoding.Boolean:
 			if lenValue > 0 {
 				bnv.Value = BACnetValue{Value: true}
 			} else {
 				bnv.Value = BACnetValue{Value: false}
 			}
-		case UnsignedInt:
+		case encoding.UnsignedInt:
 			decodeLen, bnv.Value.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
-		case SignedInt:
+		case encoding.SignedInt:
 			decodeLen, bnv.Value.Value = encoding.DecodeSigned(buffer, offset+leng, int(lenValue))
-		case Real:
+		case encoding.Real:
 			decodeLen, bnv.Value.Value = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
-		case Double:
+		case encoding.Double:
 			decodeLen, bnv.Value.Value = encoding.DecodeDoubleSafe(buffer, offset+leng, int(lenValue))
-		case OctetString:
+		case encoding.OctetString:
 			decodeLen, bnv.Value.Value = encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
-		case CharacterString:
+		case encoding.CharacterString:
 			decodeLen, bnv.Value.Value = encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
-		case BitString:
+		case encoding.BitString:
 			bitValue := BACnetBitString{}
 			decodeLen = bitValue.Decode(buffer, offset+leng, int(lenValue))
 			bnv.Value.Value = bitValue
-		case Enumerated:
+		case encoding.Enumerated:
 			decodeLen, bnv.Value.Value = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
-		case Date:
+		case encoding.Date:
 			decodeLen, dateValue := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
 
 			if leng < apduLen {
 				leng1, tagNumber, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng+decodeLen)
-				if tagNumber == byte(Time) {
+				if tagNumber == byte(encoding.Time) {
 					leng += leng1
 					leng--
 					bnv.Value.Value = &DateTime{}
@@ -2406,7 +2406,7 @@ func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
 			} else {
 				bnv.Value.Value = dateValue
 			}
-		case Time:
+		case encoding.Time:
 			decodeLen, bnv.Value.Value = encoding.DecodeBACnetTimeSafe(buffer, offset+leng, int(lenValue))
 		}
 

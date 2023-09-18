@@ -8,27 +8,6 @@ import (
 	"github.com/absmach/bacnet/pkg/encoding"
 )
 
-type ApplicationTags int
-
-const (
-	Null ApplicationTags = iota
-	Boolean
-	UnsignedInt
-	SignedInt
-	Real
-	Double
-	OctetString
-	CharacterString
-	BitString
-	Enumerated
-	Date
-	Time
-	BACnetObjectIdentifier
-	Reserve1
-	Reserve2
-	Reserve3
-)
-
 type BACnetAddress struct {
 	// BACnet Network Number.
 	// NetworkNumber = 0, for local.
@@ -88,7 +67,7 @@ func (ba *BACnetAddress) IPAndPort() (string, int) {
 func (ba *BACnetAddress) Decode(buffer []byte, offset, apduLen int) int {
 	leng := 0
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
-	if tagNumber == byte(UnsignedInt) {
+	if tagNumber == byte(encoding.UnsignedInt) {
 		leng += leng1
 		leng1, ba.NetworkNumber = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
 		leng += leng1
@@ -97,7 +76,7 @@ func (ba *BACnetAddress) Decode(buffer []byte, offset, apduLen int) int {
 	}
 
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
-	if tagNumber == byte(OctetString) {
+	if tagNumber == byte(encoding.OctetString) {
 		leng += leng1
 		leng1, ba.MacAddress = encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
 		leng += leng1

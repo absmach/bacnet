@@ -144,3 +144,36 @@ func EncodeApplicationBitString(val interface{}) []byte {
 	// TODO
 	return nil
 }
+
+func EncodeContextObjectId(tagNumber BACnetApplicationTag, objectType ObjectType, instance uint32) []byte {
+	tag := EncodeTag(tagNumber, true, 4)
+	objectId := encodeBacnetObjectId(objectType, instance)
+	return append(tag, objectId...)
+}
+
+func encodeBacnetObjectId(objectType ObjectType, instance uint32) []byte {
+	objectId := ((uint32(objectType) & MaxObject) << InstanceBits) | (instance & MaxInstance)
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, objectId)
+	return buf
+}
+
+func EncodeClosingOpeningTag(tagNum BACnetApplicationTag, opening bool) []byte {
+	tag := make([]byte, 2)
+	tag[0] = 0x8
+	if tagNum <= 14 {
+		tag[0] |= (byte(tagNum) << 4)
+	} else {
+		tag[0] |= 0xF0
+		binary.BigEndian.PutUint16(tag[1:], uint16(tagNum))
+	}
+	if opening {
+		// Set the type field to opening tag.
+		tag[0] |= 6
+		return tag
+	}
+	// Set the type field to closing tag.
+	tag[0] |= 7
+
+	return tag
+}

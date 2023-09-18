@@ -21,7 +21,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
 
-	if tagNumber != byte(BACnetObjectIdentifier) {
+	if tagNumber != byte(encoding.BACnetObjectIdentifier) {
 		fmt.Println("tag num object id", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
@@ -35,7 +35,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 	// MAX APDU - unsigned
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber != byte(UnsignedInt) {
+	if tagNumber != byte(encoding.UnsignedInt) {
 		fmt.Println("tag num max apdu", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
@@ -47,7 +47,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 	// Segmentation - enumerated
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber != byte(Enumerated) {
+	if tagNumber != byte(encoding.Enumerated) {
 		fmt.Println("tag num segmentation", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
@@ -60,7 +60,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
 
-	if tagNumber != byte(UnsignedInt) {
+	if tagNumber != byte(encoding.UnsignedInt) {
 		fmt.Println("tag num vendor ID", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
@@ -79,7 +79,7 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 func (iam IAmRequest) Encode() []byte {
 	tmp := iam.IamDeviceIdentifier.Encode()
 	propID := iam.SegmentationSupported.(encoding.PropertyIdentifier)
-	return append(append(append(append(encoding.EncodeTag(encoding.BACnetApplicationTag(BACnetObjectIdentifier), false, len(tmp)), tmp...), encoding.EncodeApplicationUnsigned(iam.MaxAPDULengthAccepted)...), encoding.EncodeApplicationEnumerated(uint32(propID))...), encoding.EncodeApplicationUnsigned(iam.VendorID)...)
+	return append(append(append(append(encoding.EncodeTag(encoding.BACnetApplicationTag(encoding.BACnetObjectIdentifier), false, len(tmp)), tmp...), encoding.EncodeApplicationUnsigned(iam.MaxAPDULengthAccepted)...), encoding.EncodeApplicationEnumerated(uint32(propID))...), encoding.EncodeApplicationUnsigned(iam.VendorID)...)
 }
 
 type YouAreRequest struct {
@@ -95,7 +95,7 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 
 	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber == byte(UnsignedInt) {
+	if tagNumber == byte(encoding.UnsignedInt) {
 		leng1, decodedValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
 		leng += leng1
 		youAre.VendorID = decodedValue
@@ -105,7 +105,7 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber == byte(CharacterString) {
+	if tagNumber == byte(encoding.CharacterString) {
 		leng1, decodedValue := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
 
 		leng += leng1
@@ -116,7 +116,7 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 
 	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	leng += leng1
-	if tagNumber == byte(CharacterString) {
+	if tagNumber == byte(encoding.CharacterString) {
 		leng1, decodedValue := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
 		leng += leng1
 		youAre.SerialNumber = decodedValue
@@ -126,7 +126,7 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 
 	if leng < apduLen {
 		leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
-		if tagNumber == byte(BACnetObjectIdentifier) {
+		if tagNumber == byte(encoding.BACnetObjectIdentifier) {
 			leng += leng1
 			youAre.DeviceIdentifier = ObjectIdentifier{}
 			leng = youAre.DeviceIdentifier.Decode(buffer, offset+leng, int(lenValue))
@@ -135,7 +135,7 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 
 	if leng < apduLen {
 		leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
-		if tagNumber == byte(OctetString) {
+		if tagNumber == byte(encoding.OctetString) {
 			leng += leng1
 			leng1, decodedValue := encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
 			leng += leng1

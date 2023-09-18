@@ -13,10 +13,6 @@ import (
 
 func main() {
 	netType := encoding.IPV4
-	/*deviceID := bacnet.ObjectIdentifier{
-		Type:     encoding.AnalogInput,
-		Instance: 101,
-	}*/
 	destination := bacnet.NewBACnetAddress(0, nil, "127.0.0.6:47809", &netType)
 	npdu := bacnet.NewNPDU(destination, nil, nil, nil)
 	npdu.Control.SetDataExpectingReply(true)
