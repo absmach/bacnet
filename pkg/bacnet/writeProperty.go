@@ -85,25 +85,26 @@ func (wpr *WritePropertyRequest) Decode(buffer []byte, offset, apduLen int) (int
 	return leng, nil
 }
 
-func (wpr *WritePropertyRequest) Encode(buffer []byte, objectID ObjectIdentifier, propertyID, arrayIndex, priority uint32, valueList []BACnetValue) []byte {
-	buf := encoding.EncodeContextObjectId(0, objectID.Type, uint32(objectID.Instance))
-	buf = append(buf, encoding.EncodeContextEnumerated(1, propertyID)...)
+func (wpr *WritePropertyRequest) Encode() []byte {
+	buf := encoding.EncodeContextObjectId(0, wpr.ObjectIdentifier.Type, uint32(wpr.ObjectIdentifier.Instance))
+	propId := wpr.PropertyIdentifier.(encoding.PropertyIdentifier)
+	buf = append(buf, encoding.EncodeContextEnumerated(1, uint32(propId))...)
 
 	// Optional array index; ALL is -1 which is assumed when missing
-	if arrayIndex != encoding.ArrayAll {
-		buf = append(buf, encoding.EncodeContextUnsigned(2, arrayIndex)...)
+	if wpr.PropertyArrayIndex != encoding.ArrayAll {
+		buf = append(buf, encoding.EncodeContextUnsigned(2, wpr.PropertyArrayIndex)...)
 	}
 
 	// PropertyValue
 	buf = append(buf, encoding.EncodeClosingOpeningTag(3, true)...)
-	for _, value := range valueList {
+	for _, value := range wpr.PropertyValue {
 		buf = append(buf, value.Encode()...)
 	}
 	buf = append(buf, encoding.EncodeClosingOpeningTag(3, false)...)
 
 	// Optional priority - 0 if not set, 1..16 if set
-	if priority != encoding.NoPriority {
-		buf = append(buf, encoding.EncodeContextUnsigned(4, priority)...)
+	if wpr.Priority != encoding.NoPriority {
+		buf = append(buf, encoding.EncodeContextUnsigned(4, wpr.Priority)...)
 	}
 
 	return buf
