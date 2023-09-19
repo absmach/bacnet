@@ -12,8 +12,10 @@ import (
 )
 
 func main() {
-	netType := encoding.IPV4
-	destination := bacnet.NewBACnetAddress(0, nil, "127.0.0.6:47809", &netType)
+	destination, err := bacnet.NewBACnetAddress(0, nil, "127.0.0.6:47809")
+	if err != nil {
+		log.Fatal(err)
+	}
 	npdu := bacnet.NewNPDU(destination, nil, nil, nil)
 	npdu.Control.SetDataExpectingReply(true)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
@@ -98,7 +100,10 @@ func main() {
 		fmt.Printf("headerLength %v BVLCfunction %v msgLen %v\n", headerLength, function, msgLength)
 		fmt.Println("blvc", blvc)
 		npdu := bacnet.NPDU{Version: 1}
-		npduLen := npdu.Decode(response, headerLength)
+		npduLen, err := npdu.Decode(response, headerLength)
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("npdu", npdu)
 		apdu := bacnet.APDU{}
 		apduLen := apdu.Decode(response, headerLength+npduLen)

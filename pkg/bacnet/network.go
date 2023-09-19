@@ -3,6 +3,7 @@ package bacnet
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/absmach/bacnet/pkg/encoding"
@@ -17,7 +18,7 @@ type BACnetAddress struct {
 	MacAddress []byte
 }
 
-func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface{}, netType *encoding.BACnetNetworkType) *BACnetAddress {
+func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface{}) (*BACnetAddress, error) {
 	addr := &BACnetAddress{
 		NetworkNumber: networkNumber,
 		MacAddress:    macAddress,
@@ -26,7 +27,21 @@ func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface
 	switch addr1 := address.(type) {
 	case string:
 		if address != "" {
-			switch *netType {
+
+			var netType encoding.BACnetNetworkType
+			if ip := net.ParseIP(addr1); ip != nil {
+				if ip.To4() != nil {
+					netType = encoding.IPV4
+				} else if ip.To16() != nil {
+					netType = encoding.IPV6
+				}
+			} else {
+				if _, err := net.ParseMAC(addr1); err != nil {
+					return nil, err
+				}
+				netType = encoding.Ethernet
+			}
+			switch netType {
 			case encoding.IPV4:
 				tmp1 := strings.Split(addr1, ":")
 				parts := strings.Split(tmp1[0], ".")
@@ -49,13 +64,13 @@ func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface
 			}
 		}
 	case ObjectIdentifier:
-		if *netType == encoding.IPV4 {
-			addr.MacAddress = make([]byte, 8)
-			binary.LittleEndian.PutUint64(addr.MacAddress, uint64(addr1.Instance))
-		}
+		// Only IPV4 TODO.
+		addr.MacAddress = make([]byte, 8)
+		binary.LittleEndian.PutUint64(addr.MacAddress, uint64(addr1.Instance))
+
 	}
 
-	return addr
+	return addr, nil
 }
 
 func (ba *BACnetAddress) IPAndPort() (string, int) {

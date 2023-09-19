@@ -3,10 +3,11 @@ package bacnet
 import (
 	"encoding/binary"
 	"errors"
-	"log"
 
 	"github.com/absmach/bacnet/internal"
 )
+
+var errNPDUVersion = errors.New("unexpected NPDU version")
 
 type NPDU struct {
 	Version     uint8 // Always one.
@@ -188,14 +189,14 @@ func (npdu *NPDU) Encode() ([]byte, error) {
 	return buffer, nil
 }
 
-func (npdu *NPDU) Decode(buffer []byte, offset int) int {
+func (npdu *NPDU) Decode(buffer []byte, offset int) (int, error) {
 	length := 0
 	version := buffer[offset] // always 1!!!!
 	length++
 	if version != npdu.Version {
-		log.Println("Received something else!")
-		return -1
+		return -1, errNPDUVersion
 	}
+	var err error
 
 	npdu.Control = *NewNPDUControlInformation()
 	length += npdu.Control.Decode(buffer, offset+length)
@@ -207,7 +208,10 @@ func (npdu *NPDU) Decode(buffer []byte, offset int) int {
 		length++
 		npdu.DADR = buffer[offset+length : offset+length+int(npdu.DLEN)]
 		length += int(npdu.DLEN)
-		npdu.Destination = NewBACnetAddress(uint32(npdu.DNET), npdu.DADR, "", nil)
+		npdu.Destination, err = NewBACnetAddress(uint32(npdu.DNET), npdu.DADR, "")
+		if err != nil {
+			return -1, err
+		}
 	}
 
 	if npdu.Control.IsSourceSpecifier() {
@@ -217,7 +221,10 @@ func (npdu *NPDU) Decode(buffer []byte, offset int) int {
 		length++
 		npdu.SADR = buffer[offset+length : offset+length+int(npdu.SLEN)]
 		length += int(npdu.SLEN)
-		npdu.Source = NewBACnetAddress(uint32(npdu.SNET), npdu.SADR, "", nil)
+		npdu.Source, err = NewBACnetAddress(uint32(npdu.SNET), npdu.SADR, "")
+		if err != nil {
+			return -1, err
+		}
 	}
 
 	if npdu.Control.IsDestinationSpecifier() {
@@ -234,5 +241,5 @@ func (npdu *NPDU) Decode(buffer []byte, offset int) int {
 		}
 	}
 
-	return length
+	return length, nil
 }

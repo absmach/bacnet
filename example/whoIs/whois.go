@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/absmach/bacnet/pkg/bacnet"
-	"github.com/absmach/bacnet/pkg/encoding"
 	"github.com/absmach/bacnet/pkg/transport"
 	"github.com/absmach/bacnet/pkg/transport/udp"
 )
@@ -25,10 +24,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to encode npdu with error %v", err)
 	}
-	netType := encoding.IPV4
-	broads = *bacnet.NewBACnetAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
+	broads, err = bacnet.NewBACnetAddress(0xFFFF, nil, "127.0.0.255:47809")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	npdu := bacnet.NewNPDU(&broads, nil, nil, nil)
+	npdu := bacnet.NewNPDU(broads, nil, nil, nil)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
 	npduBytes, err := npdu.Encode()
 	if err != nil {
@@ -105,7 +106,10 @@ func main() {
 		fmt.Println("blvc", blvc)
 		fmt.Println(response[headerLength:])
 		npdu := bacnet.NPDU{Version: 1}
-		npduLen := npdu.Decode(response, headerLength)
+		npduLen, err := npdu.Decode(response, headerLength)
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("npdu", npdu)
 		fmt.Println(response[headerLength+npduLen:])
 		apdu := bacnet.APDU{}

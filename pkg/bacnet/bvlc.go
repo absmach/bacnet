@@ -49,7 +49,7 @@ type BVLC struct {
 	BVLCMaxAPDU      MaxAPDU
 }
 
-func NewBVLC(transprt transport.Transport) *BVLC {
+func NewBVLC(transprt transport.TransportMethod) *BVLC {
 	bvlc := &BVLC{
 		BVLLTypeBACnetIP: 0x81,
 		BVLCHeaderLength: 4,
