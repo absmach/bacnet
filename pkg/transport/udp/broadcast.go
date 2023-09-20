@@ -8,9 +8,11 @@ import (
 	"github.com/absmach/bacnet/pkg/encoding"
 )
 
-func GetBroadcastAddress(localEndpoint string, port int) (bacnet.BACnetAddress, error) {
-	broadcast := "255.255.255.255"
+const globalBroadcast = "255.255.255.255"
 
+// GetBroadcasrAddress returns the broadcast address given the local address and port.
+func GetBroadcastAddress(localEndpoint string, port int) (bacnet.BACnetAddress, error) {
+	broadcast := globalBroadcast
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return bacnet.BACnetAddress{}, err

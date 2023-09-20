@@ -3,11 +3,11 @@ package bacnet
 import (
 	"encoding/binary"
 	"errors"
-	"log"
 
 	"github.com/absmach/bacnet/internal"
 )
 
+// NPDU Network Protocol Data Unit netwrok layer data packet.
 type NPDU struct {
 	Version     uint8 // Always one.
 	Control     NPDUControlInformation
@@ -24,26 +24,39 @@ type NPDU struct {
 	VendorID    uint16
 }
 
+// NPDUControlInformation a bit array to define network control information.
 type NPDUControlInformation struct {
 	control internal.BitArray
 }
 
+// NewNPDUControlInformation creates a new bit array for network control info.
 func NewNPDUControlInformation() *NPDUControlInformation {
 	return &NPDUControlInformation{
 		control: *internal.NewBitArray(8),
 	}
 }
 
+// IsNetworkLayerMessage returns wether a message is a network layer message.
 func (nci *NPDUControlInformation) IsNetworkLayerMessage() bool {
-	return nci.control.Get(0)
+	val, err := nci.control.Get(0)
+	if err != nil {
+		return false
+	}
+	return val
 }
 
+// SetNetworkLayerMessage sets the value for the netwrok layer message bit.
 func (nci *NPDUControlInformation) SetNetworkLayerMessage(a bool) {
 	nci.control.Set(0, a)
 }
 
+// IsDestinationSpecifier returns based on the npdu control bit bit if it is a message specifier.
 func (nci *NPDUControlInformation) IsDestinationSpecifier() bool {
-	return nci.control.Get(2)
+	val, err := nci.control.Get(2)
+	if err != nil {
+		return false
+	}
+	return val
 }
 
 func (nci *NPDUControlInformation) SetDestinationSpecifier(a bool) {
@@ -51,7 +64,11 @@ func (nci *NPDUControlInformation) SetDestinationSpecifier(a bool) {
 }
 
 func (nci *NPDUControlInformation) IsSourceSpecifier() bool {
-	return nci.control.Get(4)
+	val, err := nci.control.Get(4)
+	if err != nil {
+		return false
+	}
+	return val
 }
 
 func (nci *NPDUControlInformation) SetSourceSpecifier(a bool) {
@@ -59,26 +76,42 @@ func (nci *NPDUControlInformation) SetSourceSpecifier(a bool) {
 }
 
 func (nci *NPDUControlInformation) IsDataExpectingReply() bool {
-	return nci.control.Get(5)
+	val, err := nci.control.Get(5)
+	if err != nil {
+		return false
+	}
+	return val
 }
 
 func (nci *NPDUControlInformation) SetDataExpectingReply(a bool) {
 	nci.control.Set(5, a)
 }
 
+// NetworkPriority returns the network priority based on the network control information bits.
 func (nci *NPDUControlInformation) NetworkPriority() (NetworkPriority, error) {
-	if !nci.control.Get(6) && !nci.control.Get(7) {
-		return NormalMessage, nil
-	} else if !nci.control.Get(6) && nci.control.Get(7) {
-		return UrgentMessage, nil
-	} else if nci.control.Get(6) && !nci.control.Get(7) {
-		return CriticalEquipmentMessage, nil
-	} else if nci.control.Get(6) && nci.control.Get(7) {
-		return LifeSafetyMessage, nil
+	control7, err := nci.control.Get(7)
+	if err != nil {
+		return 0, err
 	}
-	return 0, errors.New("invalid network priority")
+	control6, err := nci.control.Get(6)
+	if err != nil {
+		return 0, err
+	}
+	switch {
+	case !control6 && !control7:
+		return NormalMessage, nil
+	case !control6 && control7:
+		return UrgentMessage, nil
+	case control6 && !control7:
+		return CriticalEquipmentMessage, nil
+	case control6 && control7:
+		return LifeSafetyMessage, nil
+	default:
+		return 0, errors.New("invalid network priority")
+	}
 }
 
+// SetNetworkPriority sets the network control information based on network priority set.
 func (nci *NPDUControlInformation) SetNetworkPriority(a NetworkPriority) error {
 	switch a {
 	case NormalMessage:
@@ -99,6 +132,7 @@ func (nci *NPDUControlInformation) SetNetworkPriority(a NetworkPriority) error {
 	return nil
 }
 
+// Encode encodes network control information.
 func (nci *NPDUControlInformation) Encode() ([]byte, error) {
 	b, err := nci.control.ToByte()
 	if err != nil {
@@ -107,6 +141,7 @@ func (nci *NPDUControlInformation) Encode() ([]byte, error) {
 	return []byte{b}, nil
 }
 
+// Decode decodes network control information from a byte buffer.
 func (nci *NPDUControlInformation) Decode(buffer []byte, offset int) int {
 	if offset < len(buffer) {
 		nci.control = *internal.NewBitArrayFromByte(buffer[offset])
@@ -115,6 +150,7 @@ func (nci *NPDUControlInformation) Decode(buffer []byte, offset int) int {
 	return 0
 }
 
+// NewNPDU creates a new NPDU.
 func NewNPDU(destination *BACnetAddress, source *BACnetAddress, hopCount *uint8, vendorID *uint16) *NPDU {
 	npdu := &NPDU{
 		Version:     1,
@@ -149,6 +185,7 @@ func NewNPDU(destination *BACnetAddress, source *BACnetAddress, hopCount *uint8,
 	return npdu
 }
 
+// Encode encodes the NPDU data to []byte.
 func (npdu *NPDU) Encode() ([]byte, error) {
 	buffer := make([]byte, 0)
 	buffer = append(buffer, npdu.Version)
@@ -188,12 +225,12 @@ func (npdu *NPDU) Encode() ([]byte, error) {
 	return buffer, nil
 }
 
+// Decode decodes []byte to NPDU.
 func (npdu *NPDU) Decode(buffer []byte, offset int) int {
 	length := 0
 	version := buffer[offset] // always 1!!!!
 	length++
 	if version != npdu.Version {
-		log.Println("Received something else!")
 		return -1
 	}
 

@@ -1,5 +1,9 @@
 package bacnet
 
+import "errors"
+
+var errUnknownPDU = errors.New("unkown PDU type")
+
 type BACnetConfirmedServiceChoice int
 
 type BACnetUnconfirmedServiceChoice int
@@ -62,6 +66,7 @@ const (
 	ServiceChoiceYouAre
 )
 
+// APDU Application Protocol Data Unit.
 type APDU struct {
 	PduType                   BacnetPduTypes
 	SegmentedMessage          bool
@@ -76,7 +81,8 @@ type APDU struct {
 	ServiceChoice             byte
 }
 
-func (a APDU) Encode() []byte {
+// Encode encodes APDU data to []byte.
+func (a APDU) Encode() ([]byte, error) {
 	buffer := make([]byte, 0)
 
 	tmp := byte(a.PduType)
@@ -89,38 +95,42 @@ func (a APDU) Encode() []byte {
 	if a.SegmentedResponseAccepted {
 		tmp |= 0x40
 	}
-	buffer = append(buffer, tmp)
 
-	if a.PduType == PDUTypeConfirmedServiceRequest {
+	switch a.PduType {
+	case PDUTypeConfirmedServiceRequest:
+		buffer = append(buffer, tmp)
 		buffer = append(buffer, byte(a.MaxSegmentsAccepted)|byte(a.MaxApduLengthAccepted))
 		buffer = append(buffer, a.InvokeID)
 		if a.SegmentedMessage {
 			buffer = append(buffer, a.SequenceNumber, a.ProposedWindowSize)
 		}
-	} else if a.PduType == PDUTypeUnconfirmedServiceRequest {
-		// No additional fields for unconfirmed service request
-	} else if a.PduType == PDUTypeSimpleAck {
+	case PDUTypeUnconfirmedServiceRequest:
+		buffer = append(buffer, tmp)
+	case PDUTypeSimpleAck:
+		buffer = append(buffer, tmp)
 		buffer = append(buffer, a.InvokeID)
-	} else if a.PduType == PDUTypeComplexAck {
+	case PDUTypeComplexAck:
 		buffer = append(buffer, a.InvokeID)
 		if a.SegmentedMessage {
 			buffer = append(buffer, a.SequenceNumber, a.ProposedWindowSize)
 		}
-	} else {
-		// Handle other PDU types
+	default:
+		return []byte{}, errUnknownPDU
 	}
 
 	buffer = append(buffer, a.ServiceChoice)
-	return buffer
+	return buffer, nil
 }
 
-func (a *APDU) Decode(buffer []byte, offset int) int {
+// Decode decodes []byte to APDU data.
+func (a *APDU) Decode(buffer []byte, offset int) (int, error) {
 	length := 0
 	a.PduType = BacnetPduTypes(buffer[offset])
 	tmp := byte(buffer[offset])
 	length++
 
-	if a.PduType == PDUTypeConfirmedServiceRequest {
+	switch a.PduType {
+	case PDUTypeConfirmedServiceRequest:
 		a.SegmentedMessage = tmp&0x10 != 0
 		a.MoreFollows = tmp&0x20 != 0
 		a.SegmentedResponseAccepted = tmp&0x40 != 0
@@ -137,15 +147,15 @@ func (a *APDU) Decode(buffer []byte, offset int) int {
 		}
 		a.ServiceChoice = buffer[offset+length]
 		length++
-	} else if a.PduType == PDUTypeUnconfirmedServiceRequest {
+	case PDUTypeUnconfirmedServiceRequest:
 		a.ServiceChoice = buffer[offset+length]
 		length++
-	} else if a.PduType == PDUTypeSimpleAck {
+	case PDUTypeSimpleAck:
 		a.InvokeID = buffer[offset+length]
 		length++
 		a.ServiceChoice = buffer[offset+length]
 		length++
-	} else if a.PduType == PDUTypeComplexAck {
+	case PDUTypeComplexAck:
 		a.SegmentedMessage = tmp&0x10 != 0
 		a.InvokeID = buffer[offset+length]
 		length++
@@ -157,9 +167,9 @@ func (a *APDU) Decode(buffer []byte, offset int) int {
 			a.ProposedWindowSize = buffer[offset+length]
 			length++
 		}
-	} else {
-		return -1
+	default:
+		return -1, errUnknownPDU
 	}
 
-	return length
+	return length, nil
 }

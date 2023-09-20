@@ -34,40 +34,59 @@ func (r ReadPropertyRequest) Encode() []byte {
 	return ret
 }
 
-func (r *ReadPropertyRequest) Decode(buffer []byte, offset, apduLen int) int {
+func (r *ReadPropertyRequest) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 
 	// objectIdentifier
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		r.ObjectIdentifier = &ObjectIdentifier{}
-		leng += r.ObjectIdentifier.Decode(buffer, offset+leng, int(lenValue))
+		leng1, err = r.ObjectIdentifier.Decode(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
+		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// propertyIdentifier
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		propID := encoding.PropertyList
-		leng1, r.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng1, r.PropertyIdentifier, err = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// propertyArrayIndex (optional)
 	if leng < apduLen && encoding.IsContextTag(buffer, offset+leng, 2) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, r.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, r.PropertyArrayIndex, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 
 		leng += leng1
 	}
 
-	return leng
+	return leng, nil
 }
 
 type ReadPropertyACK struct {
@@ -83,7 +102,10 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 	// 0 object_identifier
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
 		r.ObjectIdentifier = ObjectIdentifier{}
-		leng1 := r.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+		leng1, err := r.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
 		return -1, errors.New("decoding error for object_identifier")
@@ -91,10 +113,16 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 
 	// 2 propertyidentifier
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		PropertyID := encoding.PropertyList
-		leng1, propID := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &PropertyID)
+		leng1, propID, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &PropertyID)
+		if err != nil {
+			return -1, err
+		}
 		r.PropertyIdentifier = propID
 		leng += leng1
 	} else {
@@ -103,9 +131,15 @@ func (r *ReadPropertyACK) Decode(buffer []byte, offset, apduLen int) (int, error
 
 	// 2 property_array_index
 	if encoding.IsContextTag(buffer, offset+leng, 2) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, r.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, r.PropertyArrayIndex, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	}
 
@@ -145,7 +179,10 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 	var err error
 
 	if !encoding.IsContextSpecific(buffer[offset]) {
-		tagLen, tagNumber, lenValueType := encoding.DecodeTagNumberAndValue(buffer, offset)
+		tagLen, tagNumber, lenValueType, err := encoding.DecodeTagNumberAndValue(buffer, offset)
+		if err != nil {
+			return -1, err
+		}
 		if tagLen > 0 {
 			ttag := ApplicationTags(tagNumber)
 			bv.Tag = &ttag
@@ -184,7 +221,10 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 					decodeLen = bv.Value.(*BACnetAccessThreatLevel).Decode(buffer, offset+length, apduLen)
 				} else {
 					var uintVal uint32
-					decodeLen, uintVal = encoding.DecodeUnsigned(buffer, offset+length, int(lenValueType))
+					decodeLen, uintVal, err = encoding.DecodeUnsigned(buffer, offset+length, int(lenValueType))
+					if err != nil {
+						return -1, err
+					}
 					bv.Value = uintVal
 				}
 			case SignedInt:
@@ -213,7 +253,10 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 					bv.Tag = nil
 					bv.Value = &BACnetDestination{}
 					length--
-					decodeLen = bv.Value.(*BACnetDestination).Decode(buffer, offset+length, apduLen)
+					decodeLen, err = bv.Value.(*BACnetDestination).Decode(buffer, offset+length, apduLen)
+					if err != nil {
+						return -1, err
+					}
 				case encoding.StatusFlags:
 					bv.Tag = nil
 					bitValue := &BACnetStatusFlags{}
@@ -245,7 +288,10 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 					bv.Value = bitValue
 				}
 			case Enumerated:
-				decodeLen, bv.Value = encoding.DecodeEnumerated(buffer, offset+length, lenValueType, objType, propID)
+				decodeLen, bv.Value, err = encoding.DecodeEnumerated(buffer, offset+length, lenValueType, objType, propID)
+				if err != nil {
+					return -1, err
+				}
 			case Date:
 				switch *propID {
 				case encoding.EffectivePeriod:
@@ -293,11 +339,17 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 					bv.Tag = nil
 					bv.Value = &BACnetAddressBinding{}
 					length--
-					decodeLen = bv.Value.(*BACnetAddressBinding).Decode(buffer, offset+length, apduLen)
+					decodeLen, err = bv.Value.(*BACnetAddressBinding).Decode(buffer, offset+length, apduLen)
+					if err != nil {
+						return -1, err
+					}
 				} else {
 					var objectType encoding.ObjectType
 					var instance uint32
-					decodeLen, objectType, instance = encoding.DecodeObjectIDSafe(buffer, offset+length, lenValueType)
+					decodeLen, objectType, instance, err = encoding.DecodeObjectIDSafe(buffer, offset+length, lenValueType)
+					if err != nil {
+						return -1, err
+					}
 					bv.Value = ObjectIdentifier{Type: objectType, Instance: ObjectInstance(instance)}
 				}
 			default:
@@ -324,7 +376,11 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 			encoding.TimeSynchronizationRecipients,
 			encoding.CovuRecipients:
 			bv.Value = &BACnetRecipient{}
-			length += bv.Value.(*BACnetRecipient).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetRecipient).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.KeySets:
 			bv.Value = &BACnetSecurityKeySet{}
 			length1, err := bv.Value.(*BACnetSecurityKeySet).Decode(buffer, offset+length, apduLen-length)
@@ -378,13 +434,21 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 			encoding.LastAccessPoint,
 			encoding.EnergyMeterRef:
 			bv.Value = &BACnetDeviceObjectReference{}
-			length += bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetDeviceObjectReference).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.EventAlgorithmInhibitRef,
 			encoding.InputReference,
 			encoding.ManipulatedVariableReference,
 			encoding.ControlledVariableReference:
 			bv.Value = &BACnetObjectPropertyReference{}
-			length += bv.Value.(*BACnetObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetObjectPropertyReference).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.LoggingRecord:
 			bv.Value = &BACnetAccumulatorRecord{}
 			length, err = bv.Value.(*BACnetAccumulatorRecord).Decode(buffer, offset+length, apduLen-length)
@@ -393,38 +457,74 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 			}
 		case encoding.Action:
 			bv.Value = &BACnetActionList{}
-			length += bv.Value.(*BACnetActionList).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetActionList).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.Scale:
 			bv.Value = &BACnetScale{}
-			length += bv.Value.(*BACnetScale).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetScale).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.LightingCommand:
 			bv.Value = &BACnetLightingCommand{}
-			length += bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetLightingCommand).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.Prescale:
 			bv.Value = &BACnetPrescale{}
-			length += bv.Value.(*BACnetPrescale).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetPrescale).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.RequestedShedLevel,
 			encoding.ExpectedShedLevel,
 			encoding.ActualShedLevel:
 			bv.Value = &BACnetShedLevel{}
-			length += bv.Value.(*BACnetShedLevel).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetShedLevel).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.LogBuffer:
 			switch *objType {
 			case encoding.TrendLog:
 				bv.Value = &BACnetLogRecord{}
-				length += bv.Value.(*BACnetLogRecord).Decode(buffer, offset+length, apduLen-length, nil, nil)
+				length1, err := bv.Value.(*BACnetLogRecord).Decode(buffer, offset+length, apduLen-length, nil, nil)
+				if err != nil {
+					return -1, err
+				}
+				length += length1
 			case encoding.EventLog:
 				bv.Value = &BACnetEventLogRecord{}
-				length += bv.Value.(*BACnetEventLogRecord).Decode(buffer, offset+length, apduLen-length)
+				length1, err := bv.Value.(*BACnetEventLogRecord).Decode(buffer, offset+length, apduLen-length)
+				if err != nil {
+					return -1, err
+				}
+				length += length1
 			}
 		case encoding.DateList:
 			bv.Value = &BACnetCalendarEntry{}
-			length += bv.Value.(*BACnetCalendarEntry).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetCalendarEntry).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.PresentValue:
 			switch *objType {
 			case encoding.Group:
 				bv.Value = &ReadAccessResult{}
-				length += bv.Value.(*ReadAccessResult).Decode(buffer, offset+length, apduLen-length)
+				length1, err := bv.Value.(*ReadAccessResult).Decode(buffer, offset+length, apduLen-length)
+				if err != nil {
+					return -1, err
+				}
+				length += length1
 			case encoding.Channel:
 				bv.Value = &BACnetChannelValue{}
 				length += bv.Value.(*BACnetChannelValue).Decode(buffer, offset+length, apduLen-length)
@@ -441,16 +541,32 @@ func (bv *BACnetValue) Decode(buffer []byte, offset, apduLen int, objType *encod
 			length += bv.Value.(*BACnetAccessRule).Decode(buffer, offset+length, apduLen-length)
 		case encoding.Tags:
 			bv.Value = &BACnetNameValue{}
-			length += bv.Value.(*BACnetNameValue).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetNameValue).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.SubordinateTags:
 			bv.Value = &BACnetNameValueCollection{}
-			length += bv.Value.(*BACnetNameValueCollection).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetNameValueCollection).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.NetworkAccessSecurityPolicies:
 			bv.Value = &BACnetNetworkSecurityPolicy{}
-			length += bv.Value.(*BACnetNetworkSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetNetworkSecurityPolicy).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.PortFilter:
 			bv.Value = &BACnetPortPermission{}
-			length += bv.Value.(*BACnetPortPermission).Decode(buffer, offset+length, apduLen-length)
+			length1, err := bv.Value.(*BACnetPortPermission).Decode(buffer, offset+length, apduLen-length)
+			if err != nil {
+				return -1, err
+			}
+			length += length1
 		case encoding.PriorityArray:
 			bv.Value = &BACnetPriorityArray{}
 			length += bv.Value.(*BACnetPriorityArray).Decode(buffer, offset+length, apduLen-length)
@@ -574,16 +690,25 @@ func (entry *RouterEntry) Decode(buffer []byte, offset, apduLen int) (int, error
 	var length int
 
 	// network_number
-	length1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset)
+	length1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.UnsignedInt) {
 		return -1, errors.New("Error decoding network_number")
 	}
 	length += length1
-	length1, entry.NetworkNumber = encoding.DecodeUnsigned(buffer, offset+length, int(lenValue))
+	length1, entry.NetworkNumber, err = encoding.DecodeUnsigned(buffer, offset+length, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 	length += length1
 
 	// mac_address
-	length1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	length1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.OctetString) {
 		return -1, errors.New("Error decoding mac_address")
 	}
@@ -592,21 +717,33 @@ func (entry *RouterEntry) Decode(buffer []byte, offset, apduLen int) (int, error
 	length += length1
 
 	// status
-	length1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	length1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.Enumerated) {
 		return -1, errors.New("Error decoding status")
 	}
 	length += length1
-	length1, Val := encoding.DecodeUnsigned(buffer, offset+length, int(lenValue))
+	length1, Val, err := encoding.DecodeUnsigned(buffer, offset+length, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 	length += length1
 	entry.Status = BACnetRouterEntryStatus(Val)
 
 	// performance_index (optional)
 	if offset < apduLen {
-		length1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+		length1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+		if err != nil {
+			return -1, err
+		}
 		if tagNumber != byte(encoding.UnsignedInt) {
 			length += length1
-			length1, entry.PerformanceIndex = encoding.DecodeUnsigned(buffer, offset+length, int(lenValue))
+			length1, entry.PerformanceIndex, err = encoding.DecodeUnsigned(buffer, offset+length, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			length += length1
 		}
 	}
@@ -647,12 +784,15 @@ type BACnetDestination struct {
 	Transitions                 *BACnetEventTransitionBits
 }
 
-func (b *BACnetDestination) Decode(buffer []byte, offset int, apduLen int) int {
+func (b *BACnetDestination) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.BitString) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 	b.ValidDays = &BACnetDaysOfWeek{}
@@ -660,22 +800,28 @@ func (b *BACnetDestination) Decode(buffer []byte, offset int, apduLen int) int {
 	leng1 = b.ValidDays.Decode(buffer, offset+leng, int(lenValue))
 
 	if leng1 < 0 {
-		return -1
+		return -1, errInvalidMessageLength
 	}
 	leng += leng1
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.Time) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 	leng1, b.FromTime = encoding.DecodeBACnetTimeSafe(buffer, offset+leng, int(lenValue))
 
 	leng += leng1
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.Time) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 	leng1, b.ToTime = encoding.DecodeBACnetTimeSafe(buffer, offset+leng, int(lenValue))
@@ -683,25 +829,37 @@ func (b *BACnetDestination) Decode(buffer []byte, offset int, apduLen int) int {
 	leng += leng1
 
 	b.Recipient = &BACnetRecipient{}
-	leng1 = b.Recipient.Decode(buffer, offset+leng, apduLen-leng)
+	leng1, err = b.Recipient.Decode(buffer, offset+leng, apduLen-leng)
+	if err != nil {
+		return -1, err
+	}
 
 	if leng1 < 0 {
-		return -1
+		return -1, errInvalidMessageLength
 	}
 	leng += leng1
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.UnsignedInt) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
-	leng1, b.ProcessIdentifier = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng1, b.ProcessIdentifier, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 
 	leng += leng1
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.Boolean) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 	if lenValue > 0 {
@@ -710,20 +868,23 @@ func (b *BACnetDestination) Decode(buffer []byte, offset int, apduLen int) int {
 		b.IssueConfirmedNotifications = false
 	}
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != byte(encoding.BitString) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 
 	b.Transitions = &BACnetEventTransitionBits{}
 	leng1 = b.Transitions.Decode(buffer, offset+leng, int(lenValue))
 	if leng1 < 0 {
-		return -1
+		return -1, errInvalidMessageLength
 	}
 	leng += leng1
 
-	return leng
+	return leng, nil
 }
 
 type BACnetDaysOfWeek struct {
@@ -762,7 +923,7 @@ func (d *BACnetDaysOfWeek) GetDay(day int) (bool, error) {
 	if day < 0 || day > 6 {
 		return false, fmt.Errorf("Day index out of range")
 	}
-	return d.bitString.Value.Get(day) == true, nil
+	return d.bitString.Value.Get(day)
 }
 
 type BACnetBitString struct {
@@ -798,24 +959,35 @@ type BACnetRecipient struct {
 	Value interface{}
 }
 
-func (br *BACnetRecipient) Decode(buffer []byte, offset, apduLen int) int {
+func (br *BACnetRecipient) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 
 	if tagNumber == 0 {
 		// device_identifier
 		leng += leng1
 		br.Value = &ObjectIdentifier{}
-		leng += br.Value.(*ObjectIdentifier).Decode(buffer, offset+leng, int(lenValue))
+		leng1, err = br.Value.(*ObjectIdentifier).Decode(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
+		leng += leng1
 	} else if tagNumber == 1 {
 		// address
 		br.Value = &BACnetAddress{}
-		leng += br.Value.(*BACnetAddress).Decode(buffer, offset+leng, int(lenValue))
+		leng1, err = br.Value.(*BACnetAddress).Decode(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
+		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 // BACnetEventTransitionBits represents a BACnet event transition bits structure.
@@ -842,8 +1014,8 @@ func (e *BACnetEventTransitionBits) Decode(buffer []byte, offset, apduLen int) i
 }
 
 // ToOffNormal returns the value of ToOffNormal property.
-func (e *BACnetEventTransitionBits) ToOffNormal() bool {
-	return e.BitString.Value.Get(0) == true
+func (e *BACnetEventTransitionBits) ToOffNormal() (bool, error) {
+	return e.BitString.Value.Get(0)
 }
 
 // SetToOffNormal sets the value of ToOffNormal property.
@@ -852,8 +1024,8 @@ func (e *BACnetEventTransitionBits) SetToOffNormal(a bool) {
 }
 
 // ToFault returns the value of ToFault property.
-func (e *BACnetEventTransitionBits) ToFault() bool {
-	return e.BitString.Value.Get(1) == true
+func (e *BACnetEventTransitionBits) ToFault() (bool, error) {
+	return e.BitString.Value.Get(1)
 }
 
 // SetToFault sets the value of ToFault property.
@@ -862,8 +1034,8 @@ func (e *BACnetEventTransitionBits) SetToFault(a bool) {
 }
 
 // ToNormal returns the value of ToNormal property.
-func (e *BACnetEventTransitionBits) ToNormal() bool {
-	return e.BitString.Value.Get(2) == true
+func (e *BACnetEventTransitionBits) ToNormal() (bool, error) {
+	return e.BitString.Value.Get(2)
 }
 
 // SetToNormal sets the value of ToNormal property.
@@ -900,7 +1072,7 @@ func (s *BACnetStatusFlags) Decode(buffer []byte, offset, apduLen int) int {
 }
 
 // InAlarm returns the inalarm property.
-func (s *BACnetStatusFlags) InAlarm() bool {
+func (s *BACnetStatusFlags) InAlarm() (bool, error) {
 	return s.bitstring.Value.Get(0)
 }
 
@@ -910,7 +1082,7 @@ func (s *BACnetStatusFlags) SetInAlarm(a bool) {
 }
 
 // Fault returns the fault property.
-func (s *BACnetStatusFlags) Fault() bool {
+func (s *BACnetStatusFlags) Fault() (bool, error) {
 	return s.bitstring.Value.Get(1)
 }
 
@@ -920,7 +1092,7 @@ func (s *BACnetStatusFlags) SetFault(a bool) {
 }
 
 // Overridden returns the overridden property.
-func (s *BACnetStatusFlags) Overridden() bool {
+func (s *BACnetStatusFlags) Overridden() (bool, error) {
 	return s.bitstring.Value.Get(2)
 }
 
@@ -930,7 +1102,7 @@ func (s *BACnetStatusFlags) SetOverridden(a bool) {
 }
 
 // OutOfService returns the outofservice property.
-func (s *BACnetStatusFlags) OutOfService() bool {
+func (s *BACnetStatusFlags) OutOfService() (bool, error) {
 	return s.bitstring.Value.Get(3)
 }
 
@@ -960,7 +1132,7 @@ func (b *BACnetLimitEnable) Decode(buffer []byte, offset, apduLen int) int {
 	return b.bitString.Decode(buffer, offset, apduLen)
 }
 
-func (b *BACnetLimitEnable) LowLimitEnable() bool {
+func (b *BACnetLimitEnable) LowLimitEnable() (bool, error) {
 	return b.bitString.Value.Get(0)
 }
 
@@ -968,7 +1140,7 @@ func (b *BACnetLimitEnable) SetLowLimitEnable(a bool) {
 	b.bitString.Value.Set(0, a)
 }
 
-func (b *BACnetLimitEnable) HighLimitEnable() bool {
+func (b *BACnetLimitEnable) HighLimitEnable() (bool, error) {
 	return b.bitString.Value.Get(1)
 }
 
@@ -1003,7 +1175,7 @@ func (b *BACnetObjectTypesSupported) Set(property ObjectTypesSupportedProperty, 
 	b.bitstring.Value.Set(int(property), value)
 }
 
-func (b *BACnetObjectTypesSupported) Get(property ObjectTypesSupportedProperty) bool {
+func (b *BACnetObjectTypesSupported) Get(property ObjectTypesSupportedProperty) (bool, error) {
 	return b.bitstring.Value.Get(int(property))
 }
 
@@ -1076,7 +1248,7 @@ func (b *BACnetServicesSupported) Set(property ServicesSupportedProperty, value 
 	b.bitstring.Value.Set(int(property), value)
 }
 
-func (b *BACnetServicesSupported) Get(property ServicesSupportedProperty) bool {
+func (b *BACnetServicesSupported) Get(property ServicesSupportedProperty) (bool, error) {
 	return b.bitstring.Value.Get(int(property))
 }
 
@@ -1094,7 +1266,10 @@ type BACnetDateRange struct {
 func (dr *BACnetDateRange) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	var leng int
 
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber == byte(Date) {
 		leng += leng1
 		leng1, startDate := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
@@ -1104,7 +1279,10 @@ func (dr *BACnetDateRange) Decode(buffer []byte, offset, apduLen int) (int, erro
 		return -1, fmt.Errorf("Unexpected tag number: %v", tagNumber)
 	}
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber == byte(Date) {
 		leng += leng1
 		leng1, endDate := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
@@ -1123,29 +1301,43 @@ type BACnetAddressBinding struct {
 	DeviceAddress    BACnetAddress
 }
 
-func (binding *BACnetAddressBinding) Decode(buffer []byte, offset int, apduLen int) int {
+func (binding *BACnetAddressBinding) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	length := 0
-	length1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	length1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	if err != nil {
+		return -1, err
+	}
 
 	// device_identifier
 	if tagNumber == byte(BACnetObjectIdentifier) {
 		length += length1
 		binding.DeviceIdentifier = ObjectIdentifier{}
-		length += binding.DeviceIdentifier.Decode(buffer, offset+length, int(lenValue))
+		leng1, err := binding.DeviceIdentifier.Decode(buffer, offset+length, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
+		length += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	length1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	length1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+length)
+	if err != nil {
+		return -1, err
+	}
 
 	if tagNumber == byte(UnsignedInt) {
 		binding.DeviceAddress = BACnetAddress{}
-		length += binding.DeviceAddress.Decode(buffer, offset+length, int(lenValue))
+		leng1, err := binding.DeviceAddress.Decode(buffer, offset+length, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
+		length += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return length
+	return length, nil
 }
 
 type BACnetHostNPort struct {
@@ -1169,10 +1361,16 @@ func (b *BACnetHostNPort) Decode(buffer []byte, offset, apduLen int) (int, error
 	leng++
 
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 1 {
-			leng1, b.Port = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, b.Port, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		} else {
 			return -1, errors.New("Invalid tag number")
@@ -1190,7 +1388,10 @@ type BACnetHostAddress struct {
 
 func (b *BACnetHostAddress) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 
 	switch tagNumber {
 	case byte(Null):
@@ -1225,10 +1426,16 @@ func (b *BACnetSecurityKeySet) Decode(buffer []byte, offset, apduLen int) (int, 
 
 	// key_revision
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 0 {
-			leng1, b.KeyRevision = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, b.KeyRevision, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		} else {
 			return -1, errors.New("Invalid tag number")
@@ -1287,10 +1494,16 @@ func (b *BACnetKeyIdentifier) Decode(buffer []byte, offset, apduLen int) (int, e
 
 	// algorithm
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 0 {
-			leng1, b.Algorithm = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, b.Algorithm, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		} else {
 			return -1, errors.New("Invalid tag number for algorithm")
@@ -1301,10 +1514,16 @@ func (b *BACnetKeyIdentifier) Decode(buffer []byte, offset, apduLen int) (int, e
 
 	// key_id
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 1 {
-			leng1, b.KeyID = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, b.KeyID, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		} else {
 			return -1, errors.New("Invalid tag number for key_id")
@@ -1324,7 +1543,10 @@ func (b *BACnetTimeStamp) Decode(buffer []byte, offset, apduLen int) (int, error
 	leng := 0
 	if encoding.IsContextTag(buffer, offset+leng, 2) {
 		// BACnetDateTime
-		leng1, tagNumber, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, _, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 2 {
 			b.Value = &DateTime{}
@@ -1335,10 +1557,16 @@ func (b *BACnetTimeStamp) Decode(buffer []byte, offset, apduLen int) (int, error
 		}
 	} else if encoding.IsContextTag(buffer, offset+leng, 1) {
 		// sequence number
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 1 {
-			leng1, seqNum := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, seqNum, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			b.Value = seqNum
 			leng += leng1
 		} else {
@@ -1346,7 +1574,10 @@ func (b *BACnetTimeStamp) Decode(buffer []byte, offset, apduLen int) (int, error
 		}
 	} else if encoding.IsContextTag(buffer, offset+leng, 0) {
 		// time
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		if tagNumber == 0 {
 			leng1, bacnetTime := encoding.DecodeBACnetTimeSafe(buffer, offset+leng, int(lenValue))
@@ -1384,7 +1615,11 @@ func (ras *ReadAccessSpecification) Decode(buffer []byte, offset, apduLen int) (
 
 	// ObjectIdentifier
 	ras.ObjectIdentifier = ObjectIdentifier{}
-	leng += ras.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	leng1, err := ras.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if err != nil {
+		return -1, err
+	}
+	leng += leng1
 
 	// ListOfPropertyReferences
 	if buffer[offset+leng] == 0x30 { // Check for opening tag (0x30)
@@ -1423,10 +1658,16 @@ func (ref *BACnetPropertyReference) Decode(buffer []byte, offset, apduLen int) (
 
 	// propertyIdentifier
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		propID := encoding.PropertyList
-		leng1, ref.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng1, ref.PropertyIdentifier, err = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
 		return -1, errors.New("Missing context tag for PropertyIdentifier")
@@ -1434,9 +1675,15 @@ func (ref *BACnetPropertyReference) Decode(buffer []byte, offset, apduLen int) (
 
 	if leng < apduLen {
 		if encoding.IsContextTag(buffer, offset+leng, 1) && !encoding.IsClosingTagNumber(buffer, offset+leng, 1) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			leng1, ref.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, ref.PropertyArrayIndex, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
@@ -1456,7 +1703,10 @@ func (bdopr *BACnetDeviceObjectPropertyReference) Decode(buffer []byte, offset i
 
 	// tag 0 objectidentifier
 	bdopr.ObjectIdentifier = ObjectIdentifier{}
-	leng1 := bdopr.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	leng1, err := bdopr.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if err != nil {
+		return -1, err
+	}
 	if leng1 < 0 {
 		return -1, errors.New("failed to decode object identifier")
 	}
@@ -1464,10 +1714,16 @@ func (bdopr *BACnetDeviceObjectPropertyReference) Decode(buffer []byte, offset i
 
 	// tag 1 propertyidentifier
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		propID := encoding.PropertyList
-		leng1, bdopr.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng1, bdopr.PropertyIdentifier, err = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
 		return -1, errors.New("Missing tag property Identifier")
@@ -1476,9 +1732,15 @@ func (bdopr *BACnetDeviceObjectPropertyReference) Decode(buffer []byte, offset i
 	if leng < apduLen {
 		// tag 2 property-array-index optional
 		if encoding.IsContextTag(buffer, offset+leng, 2) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			leng1, bdopr.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, bdopr.PropertyArrayIndex, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
@@ -1486,7 +1748,10 @@ func (bdopr *BACnetDeviceObjectPropertyReference) Decode(buffer []byte, offset i
 	if leng < apduLen {
 		// tag 3 device-identifier optional
 		bdopr.DeviceIdentifier = ObjectIdentifier{}
-		leng1 := bdopr.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 3)
+		leng1, err := bdopr.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 3)
+		if err != nil {
+			return -1, err
+		}
 		if leng1 < 0 {
 			return -1, errors.New("failed to decode device identifier")
 		}
@@ -1501,25 +1766,31 @@ type BACnetDeviceObjectReference struct {
 	ObjectIdentifier ObjectIdentifier
 }
 
-func (bdor *BACnetDeviceObjectReference) Decode(buffer []byte, offset int, apduLen int) int {
+func (bdor *BACnetDeviceObjectReference) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	// tag 0 device-identifier optional
 	bdor.DeviceIdentifier = ObjectIdentifier{}
-	leng1 := bdor.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	leng1, err := bdor.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if err != nil {
+		return -1, err
+	}
 	if leng1 > 0 {
 		leng += leng1
 	}
 
 	// tag 1 objectidentifier
 	bdor.ObjectIdentifier = ObjectIdentifier{}
-	leng1 = bdor.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 1)
+	leng1, err = bdor.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 1)
+	if err != nil {
+		return -1, err
+	}
 	if leng1 < 0 {
-		return -1
+		return -1, errInvalidMessageLength
 	}
 	leng += leng1
 
-	return leng
+	return leng, nil
 }
 
 type BACnetObjectPropertyReference struct {
@@ -1528,39 +1799,54 @@ type BACnetObjectPropertyReference struct {
 	PropertyArrayIndex uint32
 }
 
-func (bopr *BACnetObjectPropertyReference) Decode(buffer []byte, offset int, apduLen int) int {
+func (bopr *BACnetObjectPropertyReference) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	// tag 0 objectidentifier
 	bopr.ObjectIdentifier = ObjectIdentifier{}
-	leng1 := bopr.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	leng1, err := bopr.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+	if err != nil {
+		return -1, err
+	}
 	if leng1 < 0 {
-		return -1
+		return -1, errInvalidMessageLength
 	}
 	leng += leng1
 
 	// tag 1 propertyidentifier
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		propID := encoding.PropertyList
-		leng1, bopr.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng1, bopr.PropertyIdentifier, err = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	if leng < apduLen {
 		// tag 2 property-array-index optional
 		if encoding.IsContextTag(buffer, offset+leng, 2) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			leng1, bopr.PropertyArrayIndex = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, bopr.PropertyArrayIndex, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetAccumulatorRecord struct {
@@ -1585,12 +1871,15 @@ func (bar *BACnetAccumulatorRecord) Decode(buffer []byte, offset int, apduLen in
 
 	// 0 timestamp
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		bar.Timestamp = BACnetTimeStamp{}
-		leng1, err := bar.Timestamp.Decode(buffer, offset+leng, int(lenValue))
+		leng1, err = bar.Timestamp.Decode(buffer, offset+leng, int(lenValue))
 		if err != nil {
-			return -1, errors.New("failed to decode timestamp")
+			return -1, err
 		}
 	} else {
 		return -1, errors.New("Missing tag 0")
@@ -1598,9 +1887,15 @@ func (bar *BACnetAccumulatorRecord) Decode(buffer []byte, offset int, apduLen in
 
 	// 1 present-value
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bar.PresentValue = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bar.PresentValue, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
 		return -1, errors.New("Missing tag 1")
@@ -1608,9 +1903,15 @@ func (bar *BACnetAccumulatorRecord) Decode(buffer []byte, offset int, apduLen in
 
 	// 2 accumulated-value
 	if encoding.IsContextTag(buffer, offset+leng, 2) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bar.AccumulatedValue = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bar.AccumulatedValue, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
 		return -1, errors.New("Missing tag 2")
@@ -1618,9 +1919,15 @@ func (bar *BACnetAccumulatorRecord) Decode(buffer []byte, offset int, apduLen in
 
 	// 3 accumulator-status
 	if encoding.IsContextTag(buffer, offset+leng, 3) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, statusValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, statusValue, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		bar.AccumulatorStatus = BACnetAccumulatorStatus(statusValue)
 		leng += leng1
 	} else {
@@ -1634,7 +1941,7 @@ type BACnetActionList struct {
 	Action []BACnetActionCommand
 }
 
-func (bal *BACnetActionList) Decode(buffer []byte, offset int, apduLen int) int {
+func (bal *BACnetActionList) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	// SEQUENCE OF BACnetActionCommand
@@ -1643,9 +1950,12 @@ func (bal *BACnetActionList) Decode(buffer []byte, offset int, apduLen int) int 
 		bal.Action = make([]BACnetActionCommand, 0)
 		for !encoding.IsClosingTagNumber(buffer, offset+leng, 0) {
 			bac := BACnetActionCommand{}
-			leng1 := bac.Decode(buffer, offset+leng, apduLen-leng)
+			leng1, err := bac.Decode(buffer, offset+leng, apduLen-leng)
+			if err != nil {
+				return -1, err
+			}
 			if leng1 < 0 {
-				return -1
+				return -1, errInvalidMessageLength
 			}
 			leng += leng1
 			bal.Action = append(bal.Action, bac)
@@ -1653,7 +1963,7 @@ func (bal *BACnetActionList) Decode(buffer []byte, offset int, apduLen int) int 
 		leng += 1
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetActionCommand struct {
@@ -1668,42 +1978,62 @@ type BACnetActionCommand struct {
 	WriteSuccessful    bool
 }
 
-func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) int {
+func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	// 0 device_identifier optional
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
 		bac.DeviceIdentifier = ObjectIdentifier{}
-		leng += bac.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+		leng1, err := bac.DeviceIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+		if err != nil {
+			return -1, err
+		}
+		leng += leng1
 	}
 
 	// 1 object_identifier
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
 		bac.ObjectIdentifier = ObjectIdentifier{}
-		leng += bac.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 1)
+		leng1, err := bac.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 1)
+		if err != nil {
+			return -1, err
+		}
+		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// 2 property_identifier
 	if encoding.IsContextTag(buffer, offset+leng, 2) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		propID := encoding.PropertyList
-		leng1, bac.PropertyIdentifier = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng1, bac.PropertyIdentifier, err = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if err != nil {
+			return -1, err
+		}
 		if leng1 < 0 {
-			return -1
+			return -1, errInvalidMessageLength
 		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// 3 property_array_index
 	if encoding.IsContextTag(buffer, offset+leng, 3) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		bac.PropertyArrayIndex, _ = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		bac.PropertyArrayIndex, _, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	}
 
@@ -1716,7 +2046,7 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 			propID := bac.PropertyIdentifier.(encoding.PropertyIdentifier)
 			leng1, _ := bv.Decode(buffer, offset+leng, apduLen-leng, &bac.ObjectIdentifier.Type, &propID)
 			if leng1 < 0 {
-				return -1
+				return -1, errInvalidMessageLength
 			}
 			leng += leng1
 			bac.PropertyValue = append(bac.PropertyValue, bv)
@@ -1724,18 +2054,24 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 		if encoding.IsClosingTagNumber(buffer, offset+leng, 4) {
 			leng += 1
 		} else {
-			return -1
+			return -1, errInvalidTagNumber
 		}
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	if leng < apduLen {
 		// tag 5 priority optional
 		if encoding.IsContextTag(buffer, offset+leng, 5) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			bac.Priority, _ = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			bac.Priority, _, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
@@ -1743,9 +2079,15 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 	if leng < apduLen {
 		// tag 6 post-delay optional
 		if encoding.IsContextTag(buffer, offset+leng, 6) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			bac.PostDelay, _ = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			bac.PostDelay, _, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
@@ -1753,9 +2095,15 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 	if leng < apduLen {
 		// tag 7 quit-on-failure optional
 		if encoding.IsContextTag(buffer, offset+leng, 7) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			uVal, _ := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			uVal, _, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			bac.QuitOnFailure = uVal > 0
 		}
@@ -1764,41 +2112,53 @@ func (bac *BACnetActionCommand) Decode(buffer []byte, offset int, apduLen int) i
 	if leng < apduLen {
 		// tag 8 write-successful optional
 		if encoding.IsContextTag(buffer, offset+leng, 8) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			uVal, _ := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			uVal, _, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			bac.WriteSuccessful = uVal > 0
 		}
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetScale struct {
 	Value interface{}
 }
 
-func (bs *BACnetScale) Decode(buffer []byte, offset int, apduLen int) int {
+func (bs *BACnetScale) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
 		// float-scale
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		leng1, bs.Value = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
 		leng += leng1
 	} else if encoding.IsContextTag(buffer, offset+leng, 1) {
 		// integer-scale
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bs.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bs.Value, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetLightingCommand struct {
@@ -1821,24 +2181,33 @@ const (
 	LightingOperationIncrement
 )
 
-func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int) int {
+func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	// operation
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, uVal := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, uVal, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		blc.Operation = BACnetLightingOperation(uVal)
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	if leng < apduLen {
 		// target-level
 		if encoding.IsContextTag(buffer, offset+leng, 1) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			leng1, blc.TargetLevel = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
 			leng += leng1
@@ -1848,7 +2217,10 @@ func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int)
 	if leng < apduLen {
 		// ramp-rate
 		if encoding.IsContextTag(buffer, offset+leng, 2) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			leng1, blc.RampRate = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
 			leng += leng1
@@ -1858,7 +2230,10 @@ func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int)
 	if leng < apduLen {
 		// step-increment
 		if encoding.IsContextTag(buffer, offset+leng, 3) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			leng1, blc.StepIncrement = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
 			leng += leng1
@@ -1868,9 +2243,15 @@ func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int)
 	if leng < apduLen {
 		// fade-time
 		if encoding.IsContextTag(buffer, offset+leng, 4) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			leng1, blc.FadeTime = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, blc.FadeTime, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
@@ -1878,14 +2259,20 @@ func (blc *BACnetLightingCommand) Decode(buffer []byte, offset int, apduLen int)
 	if leng < apduLen {
 		// priority
 		if encoding.IsContextTag(buffer, offset+leng, 5) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
-			leng1, blc.Priority = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, blc.Priority, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 		}
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetPrescale struct {
@@ -1893,30 +2280,42 @@ type BACnetPrescale struct {
 	ModuloDivide uint32
 }
 
-func (bp *BACnetPrescale) Decode(buffer []byte, offset int, apduLen int) int {
+func (bp *BACnetPrescale) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	// multiplier
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bp.Multiplier = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bp.Multiplier, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// modulo_divide
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bp.ModuloDivide = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bp.ModuloDivide, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetShedLevelChoice int
@@ -1932,35 +2331,50 @@ type BACnetShedLevel struct {
 	Value  interface{}
 }
 
-func (bsl *BACnetShedLevel) Decode(buffer []byte, offset int, apduLen int) int {
+func (bsl *BACnetShedLevel) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
 		// percent
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bsl.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bsl.Value, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		bsl.Choice = BACnetShedLevelChoicePercent
 	} else if encoding.IsContextTag(buffer, offset+leng, 1) {
 		// level
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, bsl.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, bsl.Value, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		bsl.Choice = BACnetShedLevelChoiceLevel
 	} else if encoding.IsContextTag(buffer, offset+leng, 2) {
 		// amount
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		leng1, bsl.Value = encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
 		leng += leng1
 		bsl.Choice = BACnetShedLevelChoiceAmount
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetLogRecordChoice int
@@ -1985,25 +2399,31 @@ type BACnetLogRecord struct {
 	StatusFlags BACnetStatusFlags
 }
 
-func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *encoding.ObjectType, propID *encoding.PropertyIdentifier) int {
+func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *encoding.ObjectType, propID *encoding.PropertyIdentifier) (int, error) {
 	leng := 0
 
 	// timestamp
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		blr.Timestamp = BACnetTimeStamp{}
-		leng1, err := blr.Timestamp.Decode(buffer, offset+leng, int(lenValue))
+		leng1, err = blr.Timestamp.Decode(buffer, offset+leng, int(lenValue))
 		if err != nil {
-			return -1
+			return -1, err
 		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	if encoding.IsContextTag(buffer, offset+leng, 1) {
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 
 		switch BACnetLogRecordChoice(tagNumber) {
@@ -2018,11 +2438,17 @@ func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *
 			leng += leng1
 			blr.LogDatum = logValue
 		case BACnetLogRecordChoiceEnumeratedValue:
-			leng1, logValue := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+			leng1, logValue, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			blr.LogDatum = logValue
 		case BACnetLogRecordChoiceUnsignedValue:
-			leng1, logValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			leng1, logValue, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			blr.LogDatum = logValue
 		case BACnetLogRecordChoiceIntegerValue:
@@ -2037,11 +2463,15 @@ func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *
 			leng++
 		case BACnetLogRecordChoiceFailure:
 			blr.LogDatum = &BACnetError{}
-			leng += blr.LogDatum.(*BACnetError).Decode(buffer, offset+leng, apduLen-leng)
+			leng1, err = blr.LogDatum.(*BACnetError).Decode(buffer, offset+leng, apduLen-leng)
+			if err != nil {
+				return -1, err
+			}
+			leng += leng1
 			if encoding.IsClosingTagNumber(buffer, offset+leng, byte(BACnetLogRecordChoiceFailure)) {
 				leng++
 			} else {
-				return -1
+				return -1, errInvalidTagNumber
 			}
 		case BACnetLogRecordChoiceTimeChange:
 			leng1, logValue := encoding.DecodeRealSafe(buffer, offset+leng, int(lenValue))
@@ -2053,7 +2483,7 @@ func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *
 				bValue := BACnetValue{}
 				leng1, _ := bValue.Decode(buffer, offset+leng, apduLen-leng, objType, propID)
 				if leng1 < 0 {
-					return -1
+					return -1, errInvalidMessageLength
 				}
 				leng += leng1
 				blr.LogDatum = append(blr.LogDatum.([]BACnetValue), bValue)
@@ -2061,26 +2491,29 @@ func (blr *BACnetLogRecord) Decode(buffer []byte, offset, apduLen int, objType *
 			if encoding.IsClosingTagNumber(buffer, offset+leng, byte(BACnetLogRecordChoiceAnyValue)) {
 				leng++
 			} else {
-				return -1
+				return -1, errInvalidTagNumber
 			}
 		default:
-			return -1
+			return -1, errInvalidTagNumber
 		}
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	if leng < apduLen {
 		// status-flags optional
 		if encoding.IsContextTag(buffer, offset+leng, 2) {
-			leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+			if err != nil {
+				return -1, err
+			}
 			leng += leng1
 			blr.StatusFlags = BACnetStatusFlags{}
 			leng += blr.StatusFlags.Decode(buffer, offset+leng, int(lenValue))
 		}
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetLogStatus struct {
@@ -2112,15 +2545,15 @@ func (bls *BACnetLogStatus) SetLogInterrupted(a bool) {
 	bls.BitString.Value.Set(2, a)
 }
 
-func (bls *BACnetLogStatus) LogDisabled() bool {
+func (bls *BACnetLogStatus) LogDisabled() (bool, error) {
 	return bls.BitString.Value.Get(0)
 }
 
-func (bls *BACnetLogStatus) BufferPurged() bool {
+func (bls *BACnetLogStatus) BufferPurged() (bool, error) {
 	return bls.BitString.Value.Get(1)
 }
 
-func (bls *BACnetLogStatus) LogInterrupted() bool {
+func (bls *BACnetLogStatus) LogInterrupted() (bool, error) {
 	return bls.BitString.Value.Get(2)
 }
 
@@ -2129,41 +2562,56 @@ type BACnetError struct {
 	ErrorCode  ErrorCodeEnum
 }
 
-func (be *BACnetError) Decode(buffer []byte, offset, apduLen int) int {
+func (be *BACnetError) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 
 	// Decode error_class
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber == byte(Enumerated) {
-		leng1, eVal := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		leng1, eVal, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		be.ErrorClass = ErrorClassEnum(eVal.(uint32))
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// Decode error_code
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber == byte(Enumerated) {
-		leng1, eVal := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		leng1, eVal, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		be.ErrorCode = ErrorCodeEnum(eVal.(uint32))
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetCalendarEntry struct {
 	Value interface{}
 }
 
-func (ce *BACnetCalendarEntry) Decode(buffer []byte, offset, apduLen int) int {
+func (ce *BACnetCalendarEntry) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber == 0 {
 		leng1, ce.Value = encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
@@ -2172,17 +2620,17 @@ func (ce *BACnetCalendarEntry) Decode(buffer []byte, offset, apduLen int) int {
 		ce.Value = &BACnetDateRange{}
 		leng1, err := ce.Value.(*BACnetDateRange).Decode(buffer, offset+leng, int(lenValue))
 		if err != nil {
-			return -1
+			return -1, err
 		}
 		leng += leng1
 	} else if tagNumber == 2 {
 		ce.Value = &BACnetWeekNDay{}
 		leng += ce.Value.(*BACnetWeekNDay).Decode(buffer, offset+leng, int(lenValue))
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetEventLogRecord struct {
@@ -2190,18 +2638,21 @@ type BACnetEventLogRecord struct {
 	LogDatum  interface{}
 }
 
-func (elr *BACnetEventLogRecord) Decode(buffer []byte, offset, apduLen int) int {
+func (elr *BACnetEventLogRecord) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 	if encoding.IsContextTag(buffer, offset+leng, 0) {
-		leng1, _, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, _, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		elr.Timestamp = DateTime{}
 		leng += elr.Timestamp.Decode(buffer, offset+leng)
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetWeekNDay struct {
@@ -2227,25 +2678,37 @@ type ReadAccessResultReadResult struct {
 	ReadResult         interface{} // Either BACnetValue or BACnetError
 }
 
-func (rarr *ReadAccessResultReadResult) Decode(buffer []byte, offset, apduLen int) int {
+func (rarr *ReadAccessResultReadResult) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 	// 2 propertyidentifier
 	if encoding.IsContextTag(buffer, offset+leng, 2) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		propID := encoding.PropertyList
-		leng1, propertyIdentifier := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		leng1, propertyIdentifier, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		rarr.PropertyIdentifier = encoding.PropertyIdentifier(propertyIdentifier.(uint32))
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	// 3 property_array_index
 	if encoding.IsContextTag(buffer, offset+leng, 3) {
-		leng1, _, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
-		leng1, propertyArrayIndex := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, propertyArrayIndex, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		rarr.PropertyArrayIndex = propertyArrayIndex
 	}
@@ -2255,25 +2718,29 @@ func (rarr *ReadAccessResultReadResult) Decode(buffer []byte, offset, apduLen in
 			rarr.ReadResult = &BACnetValue{}
 			leng1, err := rarr.ReadResult.(*BACnetValue).Decode(buffer, offset+leng, apduLen-leng, nil, nil)
 			if err != nil {
-				return -1
+				return -1, err
 			}
 			leng += leng1
 			if encoding.IsClosingTagNumber(buffer, offset+leng, 4) {
 				leng += 1
 			} else {
-				return -1
+				return -1, errInvalidTagNumber
 			}
 		} else if encoding.IsOpeningTagNumber(buffer, offset+leng, 5) {
 			rarr.ReadResult = &BACnetError{}
-			leng += rarr.ReadResult.(*BACnetError).Decode(buffer, offset+leng, apduLen-leng)
+			leng1, err := rarr.ReadResult.(*BACnetError).Decode(buffer, offset+leng, apduLen-leng)
+			if err != nil {
+				return -1, err
+			}
+			leng += leng1
 			if encoding.IsClosingTagNumber(buffer, offset+leng, 5) {
 				leng += 1
 			} else {
-				return -1
+				return -1, errInvalidTagNumber
 			}
 		}
 	}
-	return leng
+	return leng, nil
 }
 
 type ReadAccessResult struct {
@@ -2281,14 +2748,18 @@ type ReadAccessResult struct {
 	ListOfResults    []ReadAccessResultReadResult
 }
 
-func (rar *ReadAccessResult) Decode(buffer []byte, offset, apduLen int) int {
+func (rar *ReadAccessResult) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 	// tag 0 objectidentifier
 	rar.ObjectIdentifier = ObjectIdentifier{}
 	if encoding.IsClosingTagNumber(buffer, offset+leng, 0) {
-		leng += rar.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+		leng1, err := rar.ObjectIdentifier.DecodeContext(buffer, offset+leng, apduLen-leng, 0)
+		if err != nil {
+			return -1, err
+		}
+		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	if encoding.IsOpeningTagNumber(buffer, offset+leng, 1) {
@@ -2297,7 +2768,11 @@ func (rar *ReadAccessResult) Decode(buffer []byte, offset, apduLen int) int {
 
 		for (apduLen-leng) > 1 && !encoding.IsClosingTagNumber(buffer, offset+leng, 1) {
 			bValue := ReadAccessResultReadResult{}
-			leng += bValue.Decode(buffer, offset+leng, apduLen-leng)
+			leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng)
+			if err != nil {
+				return -1, err
+			}
+			leng += leng1
 
 			rar.ListOfResults = append(rar.ListOfResults, bValue)
 		}
@@ -2305,13 +2780,13 @@ func (rar *ReadAccessResult) Decode(buffer []byte, offset, apduLen int) int {
 		if encoding.IsClosingTagNumber(buffer, offset+leng, 1) {
 			leng += 1
 		} else {
-			return -1
+			return -1, errInvalidTagNumber
 		}
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetAccessRule struct {
@@ -2345,13 +2820,16 @@ type BACnetNameValue struct {
 	Value BACnetValue
 }
 
-func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
+func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 
 	// Name
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != 0 {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 	leng1, bnv.Name = encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
@@ -2360,7 +2838,10 @@ func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
 	// Decode value
 	decodeLen := 0
 	if leng < apduLen {
-		leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 
 		switch ApplicationTags(tagNumber) {
@@ -2375,7 +2856,10 @@ func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
 				bnv.Value = BACnetValue{Value: false}
 			}
 		case UnsignedInt:
-			decodeLen, bnv.Value.Value = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			decodeLen, bnv.Value.Value, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
 		case SignedInt:
 			decodeLen, bnv.Value.Value = encoding.DecodeSigned(buffer, offset+leng, int(lenValue))
 		case Real:
@@ -2391,12 +2875,18 @@ func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
 			decodeLen = bitValue.Decode(buffer, offset+leng, int(lenValue))
 			bnv.Value.Value = bitValue
 		case Enumerated:
-			decodeLen, bnv.Value.Value = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+			decodeLen, bnv.Value.Value, err = encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, nil)
+			if err != nil {
+				return -1, err
+			}
 		case Date:
 			decodeLen, dateValue := encoding.DecodeDateSafe(buffer, offset+leng, int(lenValue))
 
 			if leng < apduLen {
-				leng1, tagNumber, _ := encoding.DecodeTagNumberAndValue(buffer, offset+leng+decodeLen)
+				leng1, tagNumber, _, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng+decodeLen)
+				if err != nil {
+					return -1, err
+				}
 				if tagNumber == byte(Time) {
 					leng += leng1
 					leng--
@@ -2411,24 +2901,24 @@ func (bnv *BACnetNameValue) Decode(buffer []byte, offset, apduLen int) int {
 		}
 
 		if decodeLen < 0 {
-			return -1
+			return -1, errInvalidMessageLength
 		}
 		leng += decodeLen
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetNameValueCollection struct {
 	Members []BACnetNameValue
 }
 
-func (bnc *BACnetNameValueCollection) Decode(buffer []byte, offset, apduLen int) int {
+func (bnc *BACnetNameValueCollection) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 
 	// Check if it's an opening tag number
 	if !encoding.IsOpeningTagNumber(buffer, offset+leng, 0) {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
 	leng += 1
@@ -2436,16 +2926,19 @@ func (bnc *BACnetNameValueCollection) Decode(buffer []byte, offset, apduLen int)
 
 	for !encoding.IsClosingTagNumber(buffer, offset+leng, 0) {
 		bValue := BACnetNameValue{}
-		leng1 := bValue.Decode(buffer, offset+leng, apduLen-leng)
+		leng1, err := bValue.Decode(buffer, offset+leng, apduLen-leng)
+		if err != nil {
+			return -1, err
+		}
 		if leng1 < 0 {
-			return -1
+			return -1, errInvalidMessageLength
 		}
 		leng += leng1
 		bnc.Members = append(bnc.Members, bValue)
 	}
 
 	leng += 1
-	return leng
+	return leng, nil
 }
 
 type BACnetSecurityPolicy int
@@ -2455,31 +2948,40 @@ type BACnetNetworkSecurityPolicy struct {
 	SecurityLevel BACnetSecurityPolicy
 }
 
-func (bns *BACnetNetworkSecurityPolicy) Decode(buffer []byte, offset, apduLen int) int {
+func (bns *BACnetNetworkSecurityPolicy) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 
 	// port_id
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != 0 {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
-	leng1, portID := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng1, portID, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
 	leng += leng1
 	bns.PortID = int(portID)
 
 	leng = 0
 	// security_level
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != 1 {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
-	leng1, uVal := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng1, uVal, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	bns.SecurityLevel = BACnetSecurityPolicy(uVal)
 
-	return leng
+	return leng, nil
 }
 
 type BACnetPortPermission struct {
@@ -2487,24 +2989,33 @@ type BACnetPortPermission struct {
 	Enabled bool
 }
 
-func (bpp *BACnetPortPermission) Decode(buffer []byte, offset, apduLen int) int {
+func (bpp *BACnetPortPermission) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 
 	// port_id
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != 0 {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
-	leng1, portID := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng1, portID, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	bpp.PortID = int(portID)
 
 	leng = 0
 	// enabled
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber != 1 {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 	leng += leng1
 	if lenValue > 0 {
@@ -2513,7 +3024,7 @@ func (bpp *BACnetPortPermission) Decode(buffer []byte, offset, apduLen int) int 
 		bpp.Enabled = false
 	}
 
-	return leng
+	return leng, nil
 }
 
 type BACnetPriorityValue struct {

@@ -1641,8 +1641,11 @@ const (
 
 type VendorSpecificValue int
 
-func DecodeEnumerated(buffer []byte, offset int, lenValue uint32, objType *ObjectType, propID *PropertyIdentifier) (length int, val interface{}) {
-	leng, value := DecodeUnsigned(buffer, offset, int(lenValue))
+func DecodeEnumerated(buffer []byte, offset int, lenValue uint32, objType *ObjectType, propID *PropertyIdentifier) (length int, val interface{}, err error) {
+	leng, value, err := DecodeUnsigned(buffer, offset, int(lenValue))
+	if err != nil {
+		return length, val, err
+	}
 	if propID != nil {
 		switch *propID {
 		case SegmentationSupported:
@@ -1832,9 +1835,9 @@ func DecodeEnumerated(buffer []byte, offset int, lenValue uint32, objType *Objec
 			val = VendorSpecificValue(value)
 		}
 
-		return leng, val
+		return leng, val, nil
 	}
-	return leng, value
+	return leng, value, nil
 }
 
 func EncodeContextEnumerated(tagNumber BACnetApplicationTag, value uint32) []byte {

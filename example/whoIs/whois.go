@@ -9,7 +9,6 @@ import (
 	"github.com/absmach/bacnet/pkg/bacnet"
 	"github.com/absmach/bacnet/pkg/encoding"
 	"github.com/absmach/bacnet/pkg/transport"
-	"github.com/absmach/bacnet/pkg/transport/udp"
 )
 
 func main() {
@@ -21,12 +20,8 @@ func main() {
 	}
 	whoisBytes := req.Encode()
 
-	broads, err := udp.GetBroadcastAddress("127.0.0.6", 47809)
-	if err != nil {
-		log.Fatalf("failed to encode npdu with error %v", err)
-	}
 	netType := encoding.IPV4
-	broads = *bacnet.NewBACnetAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
+	broads := *bacnet.NewBACnetAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
 
 	npdu := bacnet.NewNPDU(&broads, nil, nil, nil)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
@@ -40,33 +35,37 @@ func main() {
 		ServiceChoice: byte(bacnet.ServiceChoiceWhoIs),
 	}
 
-	apduBytes := apdu.Encode()
+	apduBytes, err := apdu.Encode()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mes := append(npduBytes, apduBytes...)
 	mes = append(mes, whoisBytes...)
 
-	blvc := bacnet.NewBVLC(transport.IP)
+	blvc, err := bacnet.NewBVLC(transport.IP)
+	if err != nil {
+		log.Fatal(err)
+	}
 	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+4))
 	message := append(blvcBytes, mes...)
 
 	// Define the BACnet broadcast address (255.255.255.255:47808)
 	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.6:47809")
 	if err != nil {
-		fmt.Println("Error resolving remote address:", err)
-		return
+		log.Fatal("Error resolving remote address:", err)
 	}
 
 	localAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Println("Error: ", err)
+		log.Fatal("Error: ", err)
 		return
 	}
 
 	// Create a UDP connectionBACnetAddress
 	conn, err := net.DialUDP("udp", localAddr, remoteAddr)
 	if err != nil {
-		fmt.Println("Error creating UDP connection:", err)
-		return
+		log.Fatal("Error creating UDP connection:", err)
 	}
 	defer conn.Close()
 
@@ -109,7 +108,10 @@ func main() {
 		fmt.Println("npdu", npdu)
 		fmt.Println(response[headerLength+npduLen:])
 		apdu := bacnet.APDU{}
-		apduLen := apdu.Decode(response, headerLength+npduLen)
+		apduLen, err := apdu.Decode(response, headerLength+npduLen)
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("apdu", apdu)
 		fmt.Println(response[headerLength+npduLen+apduLen:])
 		iam := bacnet.IAmRequest{}

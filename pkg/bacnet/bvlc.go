@@ -43,13 +43,15 @@ const (
 	MaxAPDU1476
 )
 
+// BACnet Virtual Link Control
 type BVLC struct {
 	BVLLTypeBACnetIP byte
 	BVLCHeaderLength byte
 	BVLCMaxAPDU      MaxAPDU
 }
 
-func NewBVLC(transprt transport.Transport) *BVLC {
+// NewBVLC creates a new BVLC with the given transport.
+func NewBVLC(transprt transport.Transport) (*BVLC, error) {
 	bvlc := &BVLC{
 		BVLLTypeBACnetIP: 0x81,
 		BVLCHeaderLength: 4,
@@ -57,11 +59,15 @@ func NewBVLC(transprt transport.Transport) *BVLC {
 
 	if transprt == transport.IP {
 		bvlc.BVLCMaxAPDU = MaxAPDU1476
+	} else {
+		return nil, errUnsupportedTransport
 	}
 
-	return bvlc
+	return bvlc, nil
 }
 
+// Decode decodes incoming buffer.
+// TODO support other functions.
 func (bvlc *BVLC) Decode(buffer []byte, offset int) (int, BVLCFunctions, uint16, error) {
 	msgType := buffer[0]
 	function := BVLCFunctions(buffer[1])
@@ -100,14 +106,11 @@ func (bvlc *BVLC) Decode(buffer []byte, offset int) (int, BVLCFunctions, uint16,
 	return 0, 0, 0, errors.New("todo")
 }
 
-func (bvlc BVLC) First4BytesHeaderEncode(function BVLCFunctions, msgLength uint16) []byte {
+// Encode encodes the bvlc header to []byte.
+func (bvlc BVLC) Encode(function BVLCFunctions, msgLength uint16) []byte {
 	b := make([]byte, 4)
 	b[0] = bvlc.BVLLTypeBACnetIP
 	b[1] = byte(function)
 	binary.BigEndian.PutUint16(b[2:4], msgLength)
 	return b
-}
-
-func (bvlc BVLC) Encode(function BVLCFunctions, msgLength uint16) []byte {
-	return bvlc.First4BytesHeaderEncode(function, msgLength)
 }

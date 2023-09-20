@@ -2,7 +2,6 @@ package bacnet
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/absmach/bacnet/pkg/encoding"
 )
@@ -18,54 +17,75 @@ func (iam *IAmRequest) Decode(buffer []byte, offset int) (int, error) {
 	leng := 0
 	iam.IamDeviceIdentifier = ObjectIdentifier{}
 	// OBJECT ID - object id
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 
 	if tagNumber != byte(BACnetObjectIdentifier) {
-		fmt.Println("tag num object id", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 
-	leng = iam.IamDeviceIdentifier.Decode(buffer, offset+leng, int(lenValue))
+	leng1, err = iam.IamDeviceIdentifier.Decode(buffer, offset+leng, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
+	leng += leng1
 
 	if iam.IamDeviceIdentifier.Type != encoding.ObjectTypeDevice {
 		return -1, errors.New("Got Iam from no device")
 	}
 
 	// MAX APDU - unsigned
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber != byte(UnsignedInt) {
-		fmt.Println("tag num max apdu", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 
-	leng1, decodedValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng1, decodedValue, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	iam.MaxAPDULengthAccepted = decodedValue
 
 	// Segmentation - enumerated
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber != byte(Enumerated) {
-		fmt.Println("tag num segmentation", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 	propID := encoding.SegmentationSupported
-	leng1, segmentationSupported := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+	leng1, segmentationSupported, err := encoding.DecodeEnumerated(buffer, offset+leng, lenValue, nil, &propID)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	iam.SegmentationSupported = segmentationSupported
 
 	// Vendor ID - unsigned16
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 
 	if tagNumber != byte(UnsignedInt) {
-		fmt.Println("tag num vendor ID", tagNumber)
 		return -1, errors.New("Invalid tag number")
 	}
 
-	leng1, decodedValue = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	leng1, decodedValue, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+	if err != nil {
+		return -1, err
+	}
 
 	leng += leng1
 	if decodedValue > 0xFFFF {
@@ -93,17 +113,26 @@ type YouAreRequest struct {
 func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int, error) {
 	leng := 0
 
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber == byte(UnsignedInt) {
-		leng1, decodedValue := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, decodedValue, err := encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 		youAre.VendorID = decodedValue
 	} else {
 		return -1, errors.New("Invalid tag number")
 	}
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber == byte(CharacterString) {
 		leng1, decodedValue := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
@@ -114,7 +143,10 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 		return -1, errors.New("Invalid tag number")
 	}
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	leng += leng1
 	if tagNumber == byte(CharacterString) {
 		leng1, decodedValue := encoding.DecodeCharacterString(buffer, offset+leng, apduLen-leng, int(lenValue))
@@ -125,16 +157,26 @@ func (youAre *YouAreRequest) Decode(buffer []byte, offset int, apduLen int) (int
 	}
 
 	if leng < apduLen {
-		leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		if tagNumber == byte(BACnetObjectIdentifier) {
 			leng += leng1
 			youAre.DeviceIdentifier = ObjectIdentifier{}
-			leng = youAre.DeviceIdentifier.Decode(buffer, offset+leng, int(lenValue))
+			leng1, err = youAre.DeviceIdentifier.Decode(buffer, offset+leng, int(lenValue))
+			if err != nil {
+				return -1, err
+			}
+			leng += leng1
 		}
 	}
 
 	if leng < apduLen {
-		leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, err
+		}
 		if tagNumber == byte(OctetString) {
 			leng += leng1
 			leng1, decodedValue := encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))

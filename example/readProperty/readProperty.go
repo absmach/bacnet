@@ -13,10 +13,6 @@ import (
 
 func main() {
 	netType := encoding.IPV4
-	/*deviceID := bacnet.ObjectIdentifier{
-		Type:     encoding.AnalogInput,
-		Instance: 101,
-	}*/
 	destination := bacnet.NewBACnetAddress(0, nil, "127.0.0.6:47809", &netType)
 	npdu := bacnet.NewNPDU(destination, nil, nil, nil)
 	npdu.Control.SetDataExpectingReply(true)
@@ -32,8 +28,12 @@ func main() {
 		ServiceChoice:             byte(bacnet.ReadProperty),
 		SegmentedResponseAccepted: false,
 		MaxSegmentsAccepted:       bacnet.BacnetMaxSegments(encoding.NoSegmentation),
-		//MaxApduLengthAccepted:     bacnet.MaxAPDU1476,
-		InvokeID: 0,
+		InvokeID:                  0,
+	}
+
+	apduBytes, err := apdu.Encode()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	req := bacnet.ReadPropertyRequest{
@@ -41,10 +41,13 @@ func main() {
 		ObjectIdentifier:   &bacnet.ObjectIdentifier{Type: encoding.AnalogInput, Instance: 10},
 	}
 
-	mes := append(npduBytes, apdu.Encode()...)
+	mes := append(npduBytes, apduBytes...)
 	mes = append(mes, req.Encode()...)
 
-	blvc := bacnet.NewBVLC(transport.IP)
+	blvc, err := bacnet.NewBVLC(transport.IP)
+	if err != nil {
+		log.Fatal(err)
+	}
 	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+4))
 	message := append(blvcBytes, mes...)
 
@@ -80,7 +83,6 @@ func main() {
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second)) // Set a timeout for responses
 
 	for {
-		//conn.ReadFromUDPAddrPort()
 		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -105,7 +107,10 @@ func main() {
 		npduLen := npdu.Decode(response, headerLength)
 		fmt.Println("npdu", npdu)
 		apdu := bacnet.APDU{}
-		apduLen := apdu.Decode(response, headerLength+npduLen)
+		apduLen, err := apdu.Decode(response, headerLength+npduLen)
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("apdu", apdu)
 		readPropACK := bacnet.ReadPropertyACK{}
 		if _, err = readPropACK.Decode(response, headerLength+npduLen+apduLen-2, len(response)); err != nil {

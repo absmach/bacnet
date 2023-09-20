@@ -21,24 +21,38 @@ const (
 	Reserve3
 )
 
+const (
+	extendedTagMask    = 0xF0
+	extendedValueMask  = 0x07
+	extendedTagValue   = 5
+	openingTagValue    = 6
+	closingTagValue    = 7
+	contextSpecificBit = 0x08
+)
+
+// isExtendedTagNumber checks if a byte represents an extended tag.
 func isExtendedTagNumber(b byte) bool {
-	return (b & 0xF0) == 0xF0
+	return (b & extendedTagMask) == extendedTagMask
 }
 
+// isExtendedValue checks if a byte represents an extended value.
 func isExtendedValue(b byte) bool {
-	return (b & 0x07) == 5
+	return (b & extendedValueMask) == extendedTagValue
 }
 
+// isOpeningTag checks if a byte represents an opening tag.
 func isOpeningTag(b byte) bool {
-	return (b & 0x07) == 6
+	return (b & extendedValueMask) == openingTagValue
 }
 
+// isClosingTag checks if a byte represents a closing tag.
 func isClosingTag(b byte) bool {
-	return (b & 0x07) == 7
+	return (b & extendedValueMask) == closingTagValue
 }
 
+// IsContextSpecific checks if the context-specific bit is set in a byte.
 func IsContextSpecific(b byte) bool {
-	return (b & 0x8) == 0x8
+	return (b & contextSpecificBit) == contextSpecificBit
 }
 
 func IsContextTag(buf []byte, offset int, tagNum byte) bool {
@@ -52,7 +66,7 @@ func IsContextTagWithLength(buf []byte, offset int, tagNum byte) (int, bool) {
 	return tagLen, IsContextSpecific(buf[offset]) && myTagNum == tagNum
 }
 
-func DecodeTagNumberAndValue(buf []byte, offset int) (len int, tagNum byte, val uint32) {
+func DecodeTagNumberAndValue(buf []byte, offset int) (len int, tagNum byte, val uint32, err error) {
 	len, tagNum = decodeTagNumber(buf, offset)
 
 	switch {
@@ -60,12 +74,18 @@ func DecodeTagNumberAndValue(buf []byte, offset int) (len int, tagNum byte, val 
 		switch buf[offset+len] {
 		case 255:
 			len += 1
-			len1, val1 := DecodeUnsigned(buf, offset+len, 4)
+			len1, val1, err := DecodeUnsigned(buf, offset+len, 4)
+			if err != nil {
+				return len, tagNum, val, err
+			}
 			len += len1
 			val = val1
 		case 254:
 			len += 1
-			len1, val1 := DecodeUnsigned(buf, offset+len, 2)
+			len1, val1, err := DecodeUnsigned(buf, offset+len, 2)
+			if err != nil {
+				return len, tagNum, val, err
+			}
 			len += len1
 			val = val1
 		default:
@@ -77,7 +97,7 @@ func DecodeTagNumberAndValue(buf []byte, offset int) (len int, tagNum byte, val 
 	default:
 		val = uint32(buf[offset] & 0x07)
 	}
-	return len, tagNum, val
+	return len, tagNum, val, nil
 
 }
 

@@ -2,10 +2,16 @@ package bacnet
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/absmach/bacnet/pkg/encoding"
+)
+
+var (
+	errMacAddressLen    = errors.New("invalid mac address length")
+	errInvalidTagNumber = errors.New("invalid tag number")
 )
 
 type ApplicationTags int
@@ -79,31 +85,43 @@ func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface
 	return addr
 }
 
-func (ba *BACnetAddress) IPAndPort() (string, int) {
+func (ba *BACnetAddress) IPAndPort() (string, int, error) {
+	if len(ba.MacAddress) < 6 {
+		return "", 0, errMacAddressLen
+	}
 	ip := fmt.Sprintf("%d.%d.%d.%d", ba.MacAddress[0], ba.MacAddress[1], ba.MacAddress[2], ba.MacAddress[3])
 	port := int(ba.MacAddress[4])<<8 + int(ba.MacAddress[5])
-	return ip, port
+	return ip, port, nil
 }
 
-func (ba *BACnetAddress) Decode(buffer []byte, offset, apduLen int) int {
+func (ba *BACnetAddress) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
-	leng1, tagNumber, lenValue := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber == byte(UnsignedInt) {
 		leng += leng1
-		leng1, ba.NetworkNumber = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		leng1, ba.NetworkNumber, err = encoding.DecodeUnsigned(buffer, offset+leng, int(lenValue))
+		if err != nil {
+			return -1, err
+		}
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	leng1, tagNumber, lenValue = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	leng1, tagNumber, lenValue, err = encoding.DecodeTagNumberAndValue(buffer, offset+leng)
+	if err != nil {
+		return -1, err
+	}
 	if tagNumber == byte(OctetString) {
 		leng += leng1
 		leng1, ba.MacAddress = encoding.DecodeOctetString(buffer, offset+leng, int(lenValue))
 		leng += leng1
 	} else {
-		return -1
+		return -1, errInvalidTagNumber
 	}
 
-	return leng
+	return leng, nil
 }

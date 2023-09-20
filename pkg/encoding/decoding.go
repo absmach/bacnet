@@ -2,9 +2,13 @@ package encoding
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"math"
 	"time"
 )
+
+var errOutOfBounds = errors.New("lenth is out of range of array")
 
 type BacnetCharacterStringEncodings int
 
@@ -19,12 +23,15 @@ const (
 	CharacterISO8859  BacnetCharacterStringEncodings = 5
 )
 
-func DecodeUnsigned(buffer []byte, offset, len int) (int, uint32) {
-	value := uint32(0)
-	for i := 0; i < len; i++ {
-		value += uint32(buffer[offset+i]) << uint(8*(len-i-1))
+func DecodeUnsigned(buffer []byte, offset, length int) (int, uint32, error) {
+	if length > len(buffer) {
+		return -1, 0, errOutOfBounds
 	}
-	return len, value
+	value := uint32(0)
+	for i := 0; i < length; i++ {
+		value += uint32(buffer[offset+i]) << uint(8*(length-i-1))
+	}
+	return length, value, nil
 }
 
 func DecodeOctetString(buf []byte, offset, lenVal int) (int, []byte) {
@@ -80,13 +87,16 @@ func DecodeCharacterString(buffer []byte, offset, maxLength, lenValue int) (int,
 	return leng, charString
 }
 
-func decodeContextCharacterString(buffer []byte, offset, maxLength int, tagNumber byte) (int, string) {
+func decodeContextCharacterString(buffer []byte, offset, maxLength int, tagNumber byte) (int, string, error) {
 	leng := 0
 	status := false
 	charString := ""
 
 	if IsContextTag(buffer, offset+leng, tagNumber) {
-		leng1, _, lenValue := DecodeTagNumberAndValue(buffer, offset+leng)
+		leng1, _, lenValue, err := DecodeTagNumberAndValue(buffer, offset+leng)
+		if err != nil {
+			return -1, "", err
+		}
 		leng += leng1
 
 		status, charString = multiCharsetCharacterStringDecode(buffer, offset+1+leng, maxLength, BacnetCharacterStringEncodings(buffer[offset+leng]), int(lenValue)-1)
@@ -97,7 +107,7 @@ func decodeContextCharacterString(buffer []byte, offset, maxLength int, tagNumbe
 		}
 	}
 
-	return leng, charString
+	return leng, charString, nil
 }
 
 func DecodeSigned(buffer []byte, offset int, lenValue int) (int, int) {
@@ -119,8 +129,7 @@ func decodeReal(buffer []byte, offset int) (int, float32) {
 
 func DecodeRealSafe(buffer []byte, offset int, lenValue int) (int, float32) {
 	if lenValue != 4 {
-		value := float32(0.0)
-		return lenValue, value
+		return lenValue, float32(0.0)
 	}
 	return decodeReal(buffer, offset)
 }
@@ -132,8 +141,7 @@ func decodeDouble(buffer []byte, offset int) (int, float64) {
 
 func DecodeDoubleSafe(buffer []byte, offset int, lenValue int) (int, float64) {
 	if lenValue != 8 {
-		value := float64(0.0)
-		return lenValue, value
+		return lenValue, float64(0.0)
 	}
 	return decodeDouble(buffer, offset)
 }
@@ -145,22 +153,22 @@ func DecodeBACnetTimeSafe(buf []byte, offset, lenVal int) (int, time.Time) {
 	return decodeBACnetTime(buf, offset)
 }
 
-func decodeObjectID(buffer []byte, offset int) (int, ObjectType, uint32) {
-	var value uint32
-	var leng int
-
-	leng, value = DecodeUnsigned(buffer, offset, 4)
+func decodeObjectID(buffer []byte, offset int) (int, ObjectType, uint32, error) {
+	leng, value, err := DecodeUnsigned(buffer, offset, 4)
+	if err != nil {
+		return -1, 0, 0, err
+	}
 
 	objectInstance := value & MaxInstance
 
 	objectType := ObjectType((int(value) >> InstanceBits) & MaxObject)
 
-	return leng, objectType, objectInstance
+	return leng, objectType, objectInstance, nil
 }
 
-func DecodeObjectIDSafe(buffer []byte, offset int, lenValue uint32) (int, ObjectType, uint32) {
+func DecodeObjectIDSafe(buffer []byte, offset int, lenValue uint32) (int, ObjectType, uint32, error) {
 	if lenValue != 4 {
-		return 0, 0, 0
+		return 0, 0, 0, fmt.Errorf("lenValue not equal to 4")
 	}
 	return decodeObjectID(buffer, offset)
 }
