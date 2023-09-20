@@ -14,7 +14,7 @@ import (
 func main() {
 	netType := encoding.IPV4
 	destination := bacnet.NewAddress(0, nil, "127.0.0.6:47809", &netType)
-	npdu := bacnet.NewNPDU(destination, nil, nil, nil)
+	npdu := bacnet.NewNPDU(&destination, nil, nil, nil)
 	npdu.Control.SetDataExpectingReply(true)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
 

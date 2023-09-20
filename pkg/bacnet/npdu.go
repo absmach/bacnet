@@ -14,11 +14,11 @@ type NPDU struct {
 	DNET        uint16
 	DLEN        uint8
 	DADR        []byte
-	Destination *Address
+	Destination Address
 	SNET        uint16
 	SLEN        uint8
 	SADR        []byte
-	Source      *Address
+	Source      Address
 	MessageType byte
 	HopCount    byte
 	VendorID    uint16
@@ -155,8 +155,8 @@ func NewNPDU(destination *Address, source *Address, hopCount *uint8, vendorID *u
 	npdu := &NPDU{
 		Version:     1,
 		Control:     *NewNPDUControlInformation(),
-		Destination: destination,
-		Source:      source,
+		Destination: *destination,
+		Source:      *source,
 	}
 	switch hopCount {
 	case nil:

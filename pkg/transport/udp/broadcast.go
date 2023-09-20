@@ -10,7 +10,7 @@ import (
 
 const globalBroadcast = "255.255.255.255"
 
-// GetBroadcasrAddress returns the broadcast address given the local address and port.
+// GetBroadcastAddress returns the broadcast address given the local address and port.
 func GetBroadcastAddress(localEndpoint string, port int) (bacnet.Address, error) {
 	broadcast := globalBroadcast
 	interfaces, err := net.Interfaces()
@@ -36,6 +36,6 @@ func GetBroadcastAddress(localEndpoint string, port int) (bacnet.Address, error)
 		}
 	}
 	netType := encoding.IPV4
-	return *bacnet.NewAddress(0xFFFF, nil, broadcast+":"+strconv.Itoa(port), &netType), nil
+	return bacnet.NewAddress(0xFFFF, nil, broadcast+":"+strconv.Itoa(port), &netType), nil
 
 }

@@ -44,8 +44,8 @@ type Address struct {
 	MacAddress []byte
 }
 
-func NewAddress(networkNumber uint32, macAddress []byte, address interface{}, netType *encoding.NetworkType) *Address {
-	addr := &Address{
+func NewAddress(networkNumber uint32, macAddress []byte, address interface{}, netType *encoding.NetworkType) Address {
+	addr := Address{
 		NetworkNumber: networkNumber,
 		MacAddress:    macAddress,
 	}

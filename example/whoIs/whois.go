@@ -21,7 +21,7 @@ func main() {
 	whoisBytes := req.Encode()
 
 	netType := encoding.IPV4
-	broads := *bacnet.NewAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
+	broads := bacnet.NewAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
 
 	npdu := bacnet.NewNPDU(&broads, nil, nil, nil)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
