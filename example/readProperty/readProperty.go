@@ -13,7 +13,7 @@ import (
 
 func main() {
 	netType := encoding.IPV4
-	destination := bacnet.NewBACnetAddress(0, nil, "127.0.0.6:47809", &netType)
+	destination := bacnet.NewAddress(0, nil, "127.0.0.6:47809", &netType)
 	npdu := bacnet.NewNPDU(destination, nil, nil, nil)
 	npdu.Control.SetDataExpectingReply(true)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
@@ -27,7 +27,7 @@ func main() {
 		PduType:                   bacnet.PDUTypeConfirmedServiceRequest,
 		ServiceChoice:             byte(bacnet.ReadProperty),
 		SegmentedResponseAccepted: false,
-		MaxSegmentsAccepted:       bacnet.BacnetMaxSegments(encoding.NoSegmentation),
+		MaxSegmentsAccepted:       bacnet.MaxSegments(encoding.NoSegmentation),
 		InvokeID:                  0,
 	}
 

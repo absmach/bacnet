@@ -14,11 +14,11 @@ type NPDU struct {
 	DNET        uint16
 	DLEN        uint8
 	DADR        []byte
-	Destination *BACnetAddress
+	Destination *Address
 	SNET        uint16
 	SLEN        uint8
 	SADR        []byte
-	Source      *BACnetAddress
+	Source      *Address
 	MessageType byte
 	HopCount    byte
 	VendorID    uint16
@@ -151,7 +151,7 @@ func (nci *NPDUControlInformation) Decode(buffer []byte, offset int) int {
 }
 
 // NewNPDU creates a new NPDU.
-func NewNPDU(destination *BACnetAddress, source *BACnetAddress, hopCount *uint8, vendorID *uint16) *NPDU {
+func NewNPDU(destination *Address, source *Address, hopCount *uint8, vendorID *uint16) *NPDU {
 	npdu := &NPDU{
 		Version:     1,
 		Control:     *NewNPDUControlInformation(),
@@ -244,7 +244,7 @@ func (npdu *NPDU) Decode(buffer []byte, offset int) int {
 		length++
 		npdu.DADR = buffer[offset+length : offset+length+int(npdu.DLEN)]
 		length += int(npdu.DLEN)
-		npdu.Destination = NewBACnetAddress(uint32(npdu.DNET), npdu.DADR, "", nil)
+		npdu.Destination = NewAddress(uint32(npdu.DNET), npdu.DADR, "", nil)
 	}
 
 	if npdu.Control.IsSourceSpecifier() {
@@ -254,7 +254,7 @@ func (npdu *NPDU) Decode(buffer []byte, offset int) int {
 		length++
 		npdu.SADR = buffer[offset+length : offset+length+int(npdu.SLEN)]
 		length += int(npdu.SLEN)
-		npdu.Source = NewBACnetAddress(uint32(npdu.SNET), npdu.SADR, "", nil)
+		npdu.Source = NewAddress(uint32(npdu.SNET), npdu.SADR, "", nil)
 	}
 
 	if npdu.Control.IsDestinationSpecifier() {

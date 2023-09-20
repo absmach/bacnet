@@ -34,56 +34,56 @@ const (
 	NetworkNumberIs
 )
 
-type BacnetMaxSegments int
+type MaxSegments int
 
 const (
-	MaxSEG0  BacnetMaxSegments = 0
-	MaxSEG2  BacnetMaxSegments = 0x10
-	MaxSEG4  BacnetMaxSegments = 0x20
-	MaxSEG8  BacnetMaxSegments = 0x30
-	MaxSEG16 BacnetMaxSegments = 0x40
-	MaxSEG32 BacnetMaxSegments = 0x50
-	MaxSEG64 BacnetMaxSegments = 0x60
-	MaxSEG65 BacnetMaxSegments = 0x70
+	MaxSEG0  MaxSegments = 0
+	MaxSEG2  MaxSegments = 0x10
+	MaxSEG4  MaxSegments = 0x20
+	MaxSEG8  MaxSegments = 0x30
+	MaxSEG16 MaxSegments = 0x40
+	MaxSEG32 MaxSegments = 0x50
+	MaxSEG64 MaxSegments = 0x60
+	MaxSEG65 MaxSegments = 0x70
 )
 
-type BacnetPduTypes int
+type PduTypes int
 
 const (
-	PDUTypeConfirmedServiceRequest BacnetPduTypes = iota
+	PDUTypeConfirmedServiceRequest PduTypes = iota
 	Server
 	NegativeAck
 	// TODO
 	SegmentResponseAccepted
 	MoreFollows
-	SegmentedMessage                 BacnetPduTypes = 8
-	PDUTypeUnconfirmedServiceRequest BacnetPduTypes = 0x10
-	PDUTypeSimpleAck                 BacnetPduTypes = 0x20
-	PDUTypeComplexAck                BacnetPduTypes = 0x30
-	PDUTypeSegmentAck                BacnetPduTypes = 0x40
-	PDUTypeError                     BacnetPduTypes = 0x50
-	PDUTypeReject                    BacnetPduTypes = 0x60
-	PDUTypeAbort                     BacnetPduTypes = 0x70
-	PDUTypeMask                      BacnetPduTypes = 0xF0
+	SegmentedMessage                 PduTypes = 8
+	PDUTypeUnconfirmedServiceRequest PduTypes = 0x10
+	PDUTypeSimpleAck                 PduTypes = 0x20
+	PDUTypeComplexAck                PduTypes = 0x30
+	PDUTypeSegmentAck                PduTypes = 0x40
+	PDUTypeError                     PduTypes = 0x50
+	PDUTypeReject                    PduTypes = 0x60
+	PDUTypeAbort                     PduTypes = 0x70
+	PDUTypeMask                      PduTypes = 0xF0
 )
 
-type BacnetNpduControl int
+type NpduControl int
 
 const (
-	PriorityNormalMessage BacnetNpduControl = iota
+	PriorityNormalMessage NpduControl = iota
 	PriorityUrgentMessage
 	PriorityCriticalMessage
 	PriorityLifeSafetyMessage
 	ExpectingReply
-	SourceSpecified      BacnetNpduControl = 8
-	DestinationSpecified BacnetNpduControl = 32
-	NetworkLayerMessage  BacnetNpduControl = 128
+	SourceSpecified      NpduControl = 8
+	DestinationSpecified NpduControl = 32
+	NetworkLayerMessage  NpduControl = 128
 )
 
-type BacnetNetworkMessageType int
+type NetworkMessageType int
 
 const (
-	NetworkMessageWhoIsRouterToNetwork BacnetNetworkMessageType = iota
+	NetworkMessageWhoIsRouterToNetwork NetworkMessageType = iota
 	NetworkMessageIAmRouterToNetwork
 	NetworkMessageICouldBeRouterToNetwork
 	NetworkMessageRejectMessageToNetwork

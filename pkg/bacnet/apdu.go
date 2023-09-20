@@ -68,11 +68,11 @@ const (
 
 // APDU Application Protocol Data Unit.
 type APDU struct {
-	PduType                   BacnetPduTypes
+	PduType                   PduTypes
 	SegmentedMessage          bool
 	MoreFollows               bool
 	SegmentedResponseAccepted bool
-	MaxSegmentsAccepted       BacnetMaxSegments
+	MaxSegmentsAccepted       MaxSegments
 	MaxApduLengthAccepted     MaxAPDU
 	SequenceNumber            byte
 	InvokeID                  byte
@@ -125,7 +125,7 @@ func (a APDU) Encode() ([]byte, error) {
 // Decode decodes []byte to APDU data.
 func (a *APDU) Decode(buffer []byte, offset int) (int, error) {
 	length := 0
-	a.PduType = BacnetPduTypes(buffer[offset])
+	a.PduType = PduTypes(buffer[offset])
 	tmp := byte(buffer[offset])
 	length++
 
@@ -134,7 +134,7 @@ func (a *APDU) Decode(buffer []byte, offset int) (int, error) {
 		a.SegmentedMessage = tmp&0x10 != 0
 		a.MoreFollows = tmp&0x20 != 0
 		a.SegmentedResponseAccepted = tmp&0x40 != 0
-		a.MaxSegmentsAccepted = BacnetMaxSegments(buffer[offset+length] & 0xF0)
+		a.MaxSegmentsAccepted = MaxSegments(buffer[offset+length] & 0xF0)
 		a.MaxApduLengthAccepted = MaxAPDU(buffer[offset+length] & 0x0F)
 		length++
 		a.InvokeID = buffer[offset+length]

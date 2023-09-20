@@ -28,6 +28,7 @@ func decodeDate(buf []byte, offset int) (int, time.Time) {
 	if month == 0xFF && day == 0xFF && wday == 0xFF && year == 0xFF {
 		return 4, time.Time{}
 	}
+	//BACnet year starts in 1900
 	return 4, time.Date(int(year)+1900, time.Month(month), int(day), 0, 0, 0, 0, nil)
 }
 

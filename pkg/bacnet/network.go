@@ -25,7 +25,7 @@ const (
 	Double
 	OctetString
 	CharacterString
-	BitString
+	ApplicationTagsBitString
 	Enumerated
 	Date
 	Time
@@ -35,7 +35,7 @@ const (
 	Reserve3
 )
 
-type BACnetAddress struct {
+type Address struct {
 	// BACnet Network Number.
 	// NetworkNumber = 0, for local.
 	NetworkNumber uint32
@@ -44,8 +44,8 @@ type BACnetAddress struct {
 	MacAddress []byte
 }
 
-func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface{}, netType *encoding.BACnetNetworkType) *BACnetAddress {
-	addr := &BACnetAddress{
+func NewAddress(networkNumber uint32, macAddress []byte, address interface{}, netType *encoding.NetworkType) *Address {
+	addr := &Address{
 		NetworkNumber: networkNumber,
 		MacAddress:    macAddress,
 	}
@@ -85,7 +85,7 @@ func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface
 	return addr
 }
 
-func (ba *BACnetAddress) IPAndPort() (string, int, error) {
+func (ba *Address) IPAndPort() (string, int, error) {
 	if len(ba.MacAddress) < 6 {
 		return "", 0, errMacAddressLen
 	}
@@ -94,7 +94,7 @@ func (ba *BACnetAddress) IPAndPort() (string, int, error) {
 	return ip, port, nil
 }
 
-func (ba *BACnetAddress) Decode(buffer []byte, offset, apduLen int) (int, error) {
+func (ba *Address) Decode(buffer []byte, offset, apduLen int) (int, error) {
 	leng := 0
 	leng1, tagNumber, lenValue, err := encoding.DecodeTagNumberAndValue(buffer, offset+leng)
 	if err != nil {
