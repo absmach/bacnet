@@ -61,3 +61,8 @@ func (c *client) Send(ctx context.Context, address string, payload []byte, BVLCF
 	}
 	return nil
 }
+
+// Close closes the udp connection.
+func (c *client) Close() error {
+	return c.conn.Close()
+}

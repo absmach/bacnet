@@ -27,9 +27,8 @@ func NewBACnetAddress(networkNumber uint32, macAddress []byte, address interface
 	switch addr1 := address.(type) {
 	case string:
 		if address != "" {
-
 			var netType encoding.BACnetNetworkType
-			if ip := net.ParseIP(addr1); ip != nil {
+			if ip := net.ParseIP(strings.Split(addr1, ":")[0]); ip != nil {
 				if ip.To4() != nil {
 					netType = encoding.IPV4
 				} else if ip.To16() != nil {
