@@ -45,9 +45,9 @@ func (ba *BitArray) ToByte() (byte, error) {
 	}
 
 	var byteValue byte
-	for j := 0; j < 8; j++ {
-		if ba.bits[j] {
-			byteValue |= 1 << uint(7-j)
+	for i := 0; i < 8; i++ {
+		if ba.bits[i] {
+			byteValue |= 1 << uint(7-i)
 		}
 	}
 

@@ -12,8 +12,10 @@ import (
 )
 
 func main() {
+	serverIp := "127.0.0.6:47809"
+	serverLocalAddr := "127.0.0.1:0"
 	netType := encoding.IPV4
-	destination := bacnet.NewAddress(0, nil, "127.0.0.6:47809", &netType)
+	destination := bacnet.NewAddress(0, nil, serverIp, &netType)
 	npdu := bacnet.NewNPDU(&destination, nil, nil, nil)
 	npdu.Control.SetDataExpectingReply(true)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
@@ -51,14 +53,13 @@ func main() {
 	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+4))
 	message := append(blvcBytes, mes...)
 
-	// Define the BACnet broadcast address (255.255.255.255:47808)
-	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.6:47809")
+	remoteAddr, err := net.ResolveUDPAddr("udp", serverIp)
 	if err != nil {
 		fmt.Println("Error resolving remote address:", err)
 		return
 	}
 
-	localAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	localAddr, err := net.ResolveUDPAddr("udp", serverLocalAddr)
 	if err != nil {
 		fmt.Println("Error: ", err)
 		return
@@ -72,7 +73,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Send the WhoIsRequest packet
 	_, err = conn.Write(message)
 	if err != nil {
 		log.Fatal("Error sending WhoIsRequest:", err)
@@ -94,9 +94,8 @@ func main() {
 			break
 		}
 
-		// Process the response (you'll need to parse BACnet responses here)
 		response := buffer[:n]
-		blvc := bacnet.BVLC{BVLLTypeBACnetIP: 0x81}
+		blvc := bacnet.BVLC{BVLLTypeBACnetIP: blvc.BVLLTypeBACnetIP}
 		headerLength, function, msgLength, err := blvc.Decode(response, 0)
 		if err != nil {
 			log.Fatal(err)

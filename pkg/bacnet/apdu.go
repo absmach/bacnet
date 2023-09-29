@@ -2,11 +2,20 @@ package bacnet
 
 import "errors"
 
+// errUnknownPDU is an error returned when an unknown PDU type is encountered.
 var errUnknownPDU = errors.New("unkown PDU type")
 
+// BACnetConfirmedServiceChoice represents BACnet confirmed service choices.
 type BACnetConfirmedServiceChoice int
 
+// BACnetUnconfirmedServiceChoice represents BACnet unconfirmed service choices.
 type BACnetUnconfirmedServiceChoice int
+
+const (
+	segmentedMessageMask          = 0x10
+	moreFollowsMask               = 0x20
+	segmentedResponseAcceptedMask = 0x40
+)
 
 const (
 	// Alarm and Event Services
@@ -87,13 +96,13 @@ func (a APDU) Encode() ([]byte, error) {
 
 	tmp := byte(a.PduType)
 	if a.SegmentedMessage {
-		tmp |= 0x10
+		tmp |= segmentedMessageMask
 	}
 	if a.MoreFollows {
-		tmp |= 0x20
+		tmp |= moreFollowsMask
 	}
 	if a.SegmentedResponseAccepted {
-		tmp |= 0x40
+		tmp |= segmentedResponseAcceptedMask
 	}
 
 	switch a.PduType {
@@ -131,9 +140,9 @@ func (a *APDU) Decode(buffer []byte, offset int) (int, error) {
 
 	switch a.PduType {
 	case PDUTypeConfirmedServiceRequest:
-		a.SegmentedMessage = tmp&0x10 != 0
-		a.MoreFollows = tmp&0x20 != 0
-		a.SegmentedResponseAccepted = tmp&0x40 != 0
+		a.SegmentedMessage = tmp&segmentedMessageMask != 0
+		a.MoreFollows = tmp&moreFollowsMask != 0
+		a.SegmentedResponseAccepted = tmp&segmentedResponseAcceptedMask != 0
 		a.MaxSegmentsAccepted = MaxSegments(buffer[offset+length] & 0xF0)
 		a.MaxApduLengthAccepted = MaxAPDU(buffer[offset+length] & 0x0F)
 		length++
@@ -156,7 +165,7 @@ func (a *APDU) Decode(buffer []byte, offset int) (int, error) {
 		a.ServiceChoice = buffer[offset+length]
 		length++
 	case PDUTypeComplexAck:
-		a.SegmentedMessage = tmp&0x10 != 0
+		a.SegmentedMessage = tmp&segmentedMessageMask != 0
 		a.InvokeID = buffer[offset+length]
 		length++
 		a.ServiceChoice = buffer[offset+length]

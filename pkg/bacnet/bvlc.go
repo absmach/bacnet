@@ -43,6 +43,9 @@ const (
 	MaxAPDU1476
 )
 
+// BVLL for BACnet/IPv4
+const BVLLTypeBACnetIP = 0x81
+
 // BACnet Virtual Link Control
 type BVLC struct {
 	BVLLTypeBACnetIP byte
@@ -53,7 +56,7 @@ type BVLC struct {
 // NewBVLC creates a new BVLC with the given transport.
 func NewBVLC(transprt transport.Transport) (*BVLC, error) {
 	bvlc := &BVLC{
-		BVLLTypeBACnetIP: 0x81,
+		BVLLTypeBACnetIP: BVLLTypeBACnetIP,
 		BVLCHeaderLength: 4,
 	}
 

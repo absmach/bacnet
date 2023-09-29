@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	serverIp := "127.0.0.6:47809"
+	serverLocalAddr := "127.0.0.1:0"
 
 	var highLimit, lowLimit uint32 = 4000000, 0
 	req := bacnet.WhoIs{
@@ -21,7 +23,7 @@ func main() {
 	whoisBytes := req.Encode()
 
 	netType := encoding.IPV4
-	broads := bacnet.NewAddress(0xFFFF, nil, "127.0.0.255:47809", &netType)
+	broads := bacnet.NewAddress(encoding.MaxUint16-1, nil, serverIp, &netType)
 
 	npdu := bacnet.NewNPDU(&broads, nil, nil, nil)
 	npdu.Control.SetNetworkPriority(bacnet.NormalMessage)
@@ -47,29 +49,27 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+4))
+
+	blvcBytes := blvc.Encode(bacnet.BVLCOriginalBroadcastNPDU, uint16(len(mes)+int(blvc.BVLCHeaderLength)))
 	message := append(blvcBytes, mes...)
 
-	// Define the BACnet broadcast address (255.255.255.255:47808)
-	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.6:47809")
+	remoteAddr, err := net.ResolveUDPAddr("udp", serverIp)
 	if err != nil {
 		log.Fatal("Error resolving remote address:", err)
 	}
 
-	localAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	localAddr, err := net.ResolveUDPAddr("udp", serverLocalAddr)
 	if err != nil {
 		log.Fatal("Error: ", err)
 		return
 	}
 
-	// Create a UDP connectionBACnetAddress
 	conn, err := net.DialUDP("udp", localAddr, remoteAddr)
 	if err != nil {
 		log.Fatal("Error creating UDP connection:", err)
 	}
 	defer conn.Close()
 
-	// Send the WhoIsRequest packet
 	_, err = conn.Write(message)
 	if err != nil {
 		log.Fatal("Error sending WhoIsRequest:", err)
@@ -91,10 +91,9 @@ func main() {
 			break
 		}
 
-		// Process the response (you'll need to parse BACnet responses here)
 		response := buffer[:n]
 		log.Printf("Received response: %X\n", response)
-		blvc := bacnet.BVLC{BVLLTypeBACnetIP: 0x81}
+		blvc := bacnet.BVLC{BVLLTypeBACnetIP: blvc.BVLLTypeBACnetIP}
 		headerLength, function, msgLength, err := blvc.Decode(response, 0)
 		if err != nil {
 			log.Fatal(err)
